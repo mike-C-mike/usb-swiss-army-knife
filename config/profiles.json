@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 3,
+  "profiles": [
+    {
+      "id": "helpdesk-32",
+      "name": "Help Desk Toolkit",
+      "description": "Portable Windows diagnostics, networking, storage, installers, drivers, and administrative scripts.",
+      "minimumSizeGB": 32,
+      "includePaths": [
+        "00-ADMIN\\inventory",
+        "02-HELPDESK",
+        "04-INSTALLERS",
+        "05-DRIVERS",
+        "09-SCRIPTS"
+      ]
+    },
+    {
+      "id": "network-16",
+      "name": "Network Troubleshooting",
+      "description": "Portable network analysis utilities, packet-analysis packages, capture-driver installer, and network drivers.",
+      "minimumSizeGB": 16,
+      "includePaths": [
+        "00-ADMIN\\inventory",
+        "02-HELPDESK\\Networking",
+        "04-INSTALLERS\\Drivers",
+        "05-DRIVERS\\Network",
+        "06-PENTEST\\Network",
+        "09-SCRIPTS"
+      ]
+    },
+    {
+      "id": "forensics-acquisition-32",
+      "name": "Forensic Acquisition",
+      "description": "RAM and disk acquisition packages. This profile does not replace validated write blockers or agency procedure.",
+      "minimumSizeGB": 32,
+      "includePaths": [
+        "00-ADMIN\\inventory",
+        "03-FORENSICS\\Acquisition",
+        "09-SCRIPTS"
+      ]
+    },
+    {
+      "id": "recovery-32",
+      "name": "Endpoint Recovery",
+      "description": "Portable disk recovery, storage diagnostics, boot preparation utilities, and recovery scripts.",
+      "minimumSizeGB": 32,
+      "includePaths": [
+        "00-ADMIN\\inventory",
+        "01-BOOT\\Rufus",
+        "01-BOOT\\Ventoy",
+        "02-HELPDESK\\Storage",
+        "07-RECOVERY",
+        "09-SCRIPTS"
+      ]
+    },
+    {
+      "id": "boot-64",
+      "name": "Ventoy Boot and Rescue",
+      "description": "Ventoy, Rufus, and ISO folders for Windows, Linux, recovery, and security live environments.",
+      "minimumSizeGB": 64,
+      "includePaths": [
+        "00-ADMIN\\inventory",
+        "01-BOOT"
+      ]
+    },
+    {
+      "id": "pentest-lab-64",
+      "name": "Authorized Pentest Lab",
+      "description": "Network and web assessment utilities, documentation, scripts, and selected help-desk networking tools.",
+      "minimumSizeGB": 64,
+      "includePaths": [
+        "00-ADMIN\\inventory",
+        "02-HELPDESK\\Networking",
+        "06-PENTEST",
+        "09-SCRIPTS",
+        "11-RESOURCES"
+      ]
+    },
+    {
+      "id": "osint-16",
+      "name": "OSINT Reference Toolkit",
+      "description": "Offline OSINT Framework and Bellingcat toolkit source plus the generated online-reference dashboard.",
+      "minimumSizeGB": 16,
+      "includePaths": [
+        "00-ADMIN\\inventory",
+        "11-RESOURCES\\OSINT",
+        "11-RESOURCES\\Online-Bookmarks",
+        "11-RESOURCES\\START-HERE.html"
+      ]
+    },
+    {
+      "id": "full-256",
+      "name": "Full Portable Toolkit",
+      "description": "All portable tools, acquisition packages, recovery utilities, installers, drivers, and scripts except VM images.",
+      "minimumSizeGB": 256,
+      "includePaths": [
+        "00-ADMIN\\inventory",
+        "01-BOOT",
+        "02-HELPDESK",
+        "03-FORENSICS",
+        "04-INSTALLERS",
+        "05-DRIVERS",
+        "06-PENTEST",
+        "07-RECOVERY",
+        "09-SCRIPTS",
+        "11-RESOURCES"
+      ]
+    },
+    {
+      "id": "master-2tb",
+      "name": "Master Repository Mirror",
+      "description": "Complete repository mirror including VM storage. Intended for the 2TB external SSD.",
+      "minimumSizeGB": 1000,
+      "includePaths": [
+        "00-ADMIN",
+        "01-BOOT",
+        "02-HELPDESK",
+        "03-FORENSICS",
+        "04-INSTALLERS",
+        "05-DRIVERS",
+        "06-PENTEST",
+        "07-RECOVERY",
+        "08-VMS",
+        "09-SCRIPTS",
+        "10-USB-PROFILES",
+        "11-RESOURCES"
+      ]
+    }
+  ]
+}

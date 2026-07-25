@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 5,
+  "notes": "v0.5 adds an OSINT reference bundle and official portable Hashcat for Windows.",
+  "items": [
+    {
+      "id": "microsoft-sysinternals-suite",
+      "name": "Microsoft Sysinternals Suite",
+      "category": "Help Desk / Windows Diagnostics",
+      "destination": "02-HELPDESK\\Sysinternals",
+      "sourceType": "Direct",
+      "version": "rolling",
+      "url": "https://download.sysinternals.com/files/SysinternalsSuite.zip",
+      "fileName": "SysinternalsSuite.zip",
+      "allowedHosts": [
+        "download.sysinternals.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "rufus-portable",
+      "name": "Rufus Portable",
+      "category": "Boot Media",
+      "destination": "01-BOOT\\Rufus",
+      "sourceType": "GitHubLatest",
+      "repository": "pbatard/rufus",
+      "assetRegex": "^rufus-[0-9.]+p\\.exe$",
+      "allowedHosts": [
+        "github.com",
+        "objects.githubusercontent.com",
+        "githubusercontent.com"
+      ],
+      "extract": false,
+      "signaturePolicy": "Preferred",
+      "expectedSignerRegex": "Akeo",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "ventoy-windows",
+      "name": "Ventoy for Windows",
+      "category": "Boot Media",
+      "destination": "01-BOOT\\Ventoy",
+      "sourceType": "GitHubLatest",
+      "repository": "ventoy/Ventoy",
+      "assetRegex": "^ventoy-[0-9.]+-windows\\.zip$",
+      "allowedHosts": [
+        "github.com",
+        "objects.githubusercontent.com",
+        "githubusercontent.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "magnet-dumpit-windows",
+      "name": "Magnet DumpIt for Windows",
+      "category": "Forensics / Memory Acquisition",
+      "destination": "03-FORENSICS\\Acquisition\\Memory\\Windows\\Magnet-DumpIt",
+      "sourceType": "InteractiveImport",
+      "officialDownloadPage": "https://www.magnetforensics.com/resources/magnet-dumpit-for-windows/",
+      "expectedFileRegex": "(?i).*dumpit.*\\.(zip|exe)$",
+      "interactionInstructions": [
+        "Complete the vendor form or sign-in requirement.",
+        "Accept the vendor terms if presented.",
+        "Download the Windows package.",
+        "Leave the downloaded file in your normal Downloads folder."
+      ],
+      "extract": true,
+      "signaturePolicy": "Preferred",
+      "expectedSignerRegex": "Magnet",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "magnet-acquire",
+      "name": "Magnet Acquire",
+      "category": "Forensics / Disk and Mobile Acquisition",
+      "destination": "03-FORENSICS\\Acquisition\\Disk\\Windows\\Magnet-Acquire",
+      "sourceType": "InteractiveImport",
+      "officialDownloadPage": "https://www.magnetforensics.com/resources/magnet-acquire/",
+      "expectedFileRegex": "(?i).*magnet.*acquire.*\\.(zip|exe|msi)$",
+      "interactionInstructions": [
+        "Complete the forensic-community download form.",
+        "Accept any required license terms.",
+        "Download the current Windows package.",
+        "Leave the package in your Downloads folder."
+      ],
+      "extract": true,
+      "signaturePolicy": "Preferred",
+      "expectedSignerRegex": "Magnet",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "belkasoft-live-ram-capturer",
+      "name": "Belkasoft Live RAM Capturer",
+      "category": "Forensics / Memory Acquisition",
+      "destination": "03-FORENSICS\\Acquisition\\Memory\\Windows\\Belkasoft-Live-RAM",
+      "sourceType": "InteractiveImport",
+      "officialDownloadPage": "https://belkasoft.com/get",
+      "expectedFileRegex": "(?i).*(ram|captur|belka).*\\.(zip|exe)$",
+      "interactionInstructions": [
+        "Select the free Live RAM Capturer download.",
+        "Complete the required form.",
+        "Follow any email download link if required.",
+        "Leave the resulting package in your Downloads folder."
+      ],
+      "extract": true,
+      "signaturePolicy": "Preferred",
+      "expectedSignerRegex": "Belkasoft",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "wireshark-portable-windows",
+      "name": "Wireshark Portable for Windows",
+      "category": "Network / Packet Analysis",
+      "destination": "02-HELPDESK\\Networking\\Wireshark-Portable",
+      "sourceType": "InteractiveImport",
+      "officialDownloadPage": "https://www.wireshark.org/download.html",
+      "expectedFileRegex": "(?i)^WiresharkPortable64_.*\\.paf\\.exe$",
+      "interactionInstructions": [
+        "Choose the current Windows x64 PortableApps package.",
+        "Download it from the official Wireshark page.",
+        "Leave the package in your Downloads folder.",
+        "Npcap is handled separately because live capture modifies the local system."
+      ],
+      "extract": false,
+      "signaturePolicy": "Preferred",
+      "expectedSignerRegex": "Wireshark",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "npcap-installer",
+      "name": "Npcap Packet Capture Driver",
+      "category": "Network / Capture Driver",
+      "destination": "04-INSTALLERS\\Drivers\\Npcap",
+      "sourceType": "InteractiveImport",
+      "officialDownloadPage": "https://npcap.com/#download",
+      "expectedFileRegex": "(?i)^npcap-.*\\.exe$",
+      "interactionInstructions": [
+        "Download the current free Npcap installer from the official page.",
+        "Do not install it during repository creation.",
+        "Leave the installer in your Downloads folder."
+      ],
+      "extract": false,
+      "signaturePolicy": "Preferred",
+      "expectedSignerRegex": "Nmap|Insecure",
+      "installPolicy": "Prompt"
+    },
+    {
+      "id": "winpmem-signed",
+      "name": "WinPmem Signed Production Binary",
+      "category": "Forensics / Memory Acquisition",
+      "destination": "03-FORENSICS\\Acquisition\\Memory\\Windows\\WinPmem",
+      "sourceType": "GitHubLatest",
+      "repository": "Velocidex/WinPmem",
+      "assetRegex": "^go-winpmem_amd64_1\\.0-rc2_signed\\.exe$",
+      "allowedHosts": [
+        "github.com",
+        "objects.githubusercontent.com",
+        "githubusercontent.com"
+      ],
+      "extract": false,
+      "signaturePolicy": "Preferred",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "testdisk-photorec-windows",
+      "name": "TestDisk and PhotoRec for Windows",
+      "category": "Recovery / Disk and File Recovery",
+      "destination": "07-RECOVERY\\Windows\\TestDisk-PhotoRec",
+      "sourceType": "InteractiveImport",
+      "officialDownloadPage": "https://www.cgsecurity.org/wiki/Download_TestDisk",
+      "expectedFileRegex": "(?i)^testdisk-.*\\.win64\\.zip$",
+      "interactionInstructions": [
+        "Choose the current Windows 64-bit package from CGSecurity.",
+        "Download the ZIP archive.",
+        "Leave the package in your Downloads folder."
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "ftk-imager-windows",
+      "name": "Exterro FTK Imager",
+      "category": "Forensics / Disk Acquisition",
+      "destination": "03-FORENSICS\\Acquisition\\Disk\\Windows\\FTK-Imager",
+      "sourceType": "InteractiveImport",
+      "officialDownloadPage": "https://www.exterro.com/ftk-downloads",
+      "expectedFileRegex": "(?i).*(FTK|Imager).*\\.(exe|zip|iso)$",
+      "interactionInstructions": [
+        "Use Exterro's official FTK Imager download workflow.",
+        "Complete the registration or email-link interaction.",
+        "Download the current free FTK Imager package.",
+        "Leave the resulting file in your Downloads folder."
+      ],
+      "extract": false,
+      "signaturePolicy": "Preferred",
+      "expectedSignerRegex": "Exterro|AccessData",
+      "installPolicy": "Never"
+    },
+    {
+      "id": "cyberchef-offline",
+      "name": "CyberChef Offline",
+      "category": "Resources / Offline App",
+      "destination": "11-RESOURCES\\Offline-Apps\\CyberChef",
+      "sourceType": "GitHubLatest",
+      "repository": "gchq/CyberChef",
+      "assetRegex": "(?i)^CyberChef_.*\\.zip$",
+      "allowedHosts": [
+        "github.com",
+        "objects.githubusercontent.com",
+        "githubusercontent.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "cyberchef",
+        "recommended",
+        "full-pentest",
+        "all-resources"
+      ]
+    },
+    {
+      "id": "gtfobins-repository",
+      "name": "GTFOBins Repository",
+      "category": "Resources / Living Off the Land",
+      "destination": "11-RESOURCES\\Living-Off-The-Land\\GTFOBins",
+      "sourceType": "GitHubBranchArchive",
+      "repository": "GTFOBins/GTFOBins.github.io",
+      "branch": "master",
+      "allowedHosts": [
+        "api.github.com",
+        "codeload.github.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "living-off-land",
+        "recommended",
+        "full-pentest",
+        "all-resources"
+      ]
+    },
+    {
+      "id": "lolbas-repository",
+      "name": "LOLBAS Repository",
+      "category": "Resources / Living Off the Land",
+      "destination": "11-RESOURCES\\Living-Off-The-Land\\LOLBAS",
+      "sourceType": "GitHubBranchArchive",
+      "repository": "LOLBAS-Project/LOLBAS",
+      "branch": "master",
+      "allowedHosts": [
+        "api.github.com",
+        "codeload.github.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "living-off-land",
+        "recommended",
+        "full-pentest",
+        "all-resources"
+      ]
+    },
+    {
+      "id": "owasp-cheat-sheet-series",
+      "name": "OWASP Cheat Sheet Series",
+      "category": "Resources / Defensive Reference",
+      "destination": "11-RESOURCES\\Cheat-Sheets\\OWASP",
+      "sourceType": "GitHubBranchArchive",
+      "repository": "OWASP/CheatSheetSeries",
+      "branch": "master",
+      "allowedHosts": [
+        "api.github.com",
+        "codeload.github.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "recommended",
+        "full-pentest",
+        "all-resources"
+      ]
+    },
+    {
+      "id": "seclists-repository",
+      "name": "SecLists",
+      "category": "Resources / Wordlists",
+      "destination": "11-RESOURCES\\Wordlists\\SecLists",
+      "sourceType": "GitHubBranchArchive",
+      "repository": "danielmiessler/SecLists",
+      "branch": "master",
+      "allowedHosts": [
+        "api.github.com",
+        "codeload.github.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "seclists",
+        "full-pentest",
+        "all-resources"
+      ]
+    },
+    {
+      "id": "payloads-all-the-things",
+      "name": "PayloadsAllTheThings",
+      "category": "Resources / Pentest Reference",
+      "destination": "11-RESOURCES\\Pentest-References\\PayloadsAllTheThings",
+      "sourceType": "GitHubBranchArchive",
+      "repository": "swisskyrepo/PayloadsAllTheThings",
+      "branch": "master",
+      "allowedHosts": [
+        "api.github.com",
+        "codeload.github.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "full-pentest",
+        "all-resources"
+      ]
+    },
+    {
+      "id": "hacktricks-repository",
+      "name": "HackTricks Source Repository",
+      "category": "Resources / Pentest Reference",
+      "destination": "11-RESOURCES\\Pentest-References\\HackTricks",
+      "sourceType": "GitHubBranchArchive",
+      "repository": "HackTricks-wiki/hacktricks",
+      "branch": "master",
+      "allowedHosts": [
+        "api.github.com",
+        "codeload.github.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "full-pentest",
+        "all-resources"
+      ]
+    },
+    {
+      "id": "hashcat-windows",
+      "name": "Hashcat for Windows",
+      "category": "Pentest / Authorized Password Recovery",
+      "destination": "06-PENTEST\\Password-Recovery\\Hashcat",
+      "sourceType": "GitHubLatest",
+      "repository": "hashcat/hashcat",
+      "assetRegex": "(?i)^hashcat-[0-9.]+\\.7z$",
+      "allowedHosts": [
+        "github.com",
+        "objects.githubusercontent.com",
+        "githubusercontent.com"
+      ],
+      "extract": false,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "usageNotice": "Use only for password recovery, audits, or testing where you own the hashes or have explicit authorization."
+    },
+    {
+      "id": "osint-framework-repository",
+      "name": "OSINT Framework",
+      "category": "Resources / OSINT",
+      "destination": "11-RESOURCES\\OSINT\\OSINT-Framework",
+      "sourceType": "GitHubBranchArchive",
+      "repository": "lockfale/OSINT-Framework",
+      "branch": "master",
+      "allowedHosts": [
+        "api.github.com",
+        "codeload.github.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "osint",
+        "recommended",
+        "full-pentest",
+        "all-resources"
+      ]
+    },
+    {
+      "id": "bellingcat-osint-toolkit",
+      "name": "Bellingcat Online Investigation Toolkit Source",
+      "category": "Resources / OSINT",
+      "destination": "11-RESOURCES\\OSINT\\Bellingcat-Toolkit",
+      "sourceType": "GitHubBranchArchive",
+      "repository": "bellingcat/toolkit",
+      "branch": "main",
+      "allowedHosts": [
+        "api.github.com",
+        "codeload.github.com"
+      ],
+      "extract": true,
+      "signaturePolicy": "None",
+      "installPolicy": "Never",
+      "resourceBundles": [
+        "osint",
+        "recommended",
+        "full-pentest",
+        "all-resources"
+      ]
+    }
+  ]
+}

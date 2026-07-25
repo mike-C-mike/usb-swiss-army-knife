@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 2,
+  "securityNotice": "Use assessment references, payload examples, and wordlists only in controlled labs or under explicit authorization. SecLists and payload repositories may trigger endpoint-protection detections.",
+  "offlineResources": [
+    {
+      "name": "CyberChef",
+      "description": "Client-side decoding, encoding, hashing, parsing, and data-transformation workbench.",
+      "path": "11-RESOURCES\\Offline-Apps\\CyberChef",
+      "entryPatterns": [
+        "CyberChef*.html",
+        "index.html"
+      ],
+      "onlineUrl": "https://gchq.github.io/CyberChef/"
+    },
+    {
+      "name": "GTFOBins",
+      "description": "Unix and Linux living-off-the-land binary reference.",
+      "path": "11-RESOURCES\\Living-Off-The-Land\\GTFOBins",
+      "entryPatterns": [
+        "index.html",
+        "README.md"
+      ],
+      "onlineUrl": "https://gtfobins.github.io/"
+    },
+    {
+      "name": "LOLBAS",
+      "description": "Windows living-off-the-land binaries, scripts, and libraries.",
+      "path": "11-RESOURCES\\Living-Off-The-Land\\LOLBAS",
+      "entryPatterns": [
+        "README.md"
+      ],
+      "onlineUrl": "https://lolbas-project.github.io/"
+    },
+    {
+      "name": "OWASP Cheat Sheet Series",
+      "description": "Application-security defensive guidance and implementation references.",
+      "path": "11-RESOURCES\\Cheat-Sheets\\OWASP",
+      "entryPatterns": [
+        "Index.md",
+        "README.md"
+      ],
+      "onlineUrl": "https://cheatsheetseries.owasp.org/"
+    },
+    {
+      "name": "SecLists",
+      "description": "Assessment wordlists for discovery, usernames, passwords, fuzzing, and related testing.",
+      "path": "11-RESOURCES\\Wordlists\\SecLists",
+      "entryPatterns": [
+        "README.md"
+      ],
+      "onlineUrl": "https://github.com/danielmiessler/SecLists"
+    },
+    {
+      "name": "PayloadsAllTheThings",
+      "description": "Web-application testing techniques, payload examples, and bypass references.",
+      "path": "11-RESOURCES\\Pentest-References\\PayloadsAllTheThings",
+      "entryPatterns": [
+        "README.md"
+      ],
+      "onlineUrl": "https://github.com/swisskyrepo/PayloadsAllTheThings"
+    },
+    {
+      "name": "HackTricks",
+      "description": "Broad community pentesting, cloud, privilege-escalation, and CTF reference source.",
+      "path": "11-RESOURCES\\Pentest-References\\HackTricks",
+      "entryPatterns": [
+        "README.md"
+      ],
+      "onlineUrl": "https://book.hacktricks.xyz/"
+    },
+    {
+      "name": "OSINT Framework",
+      "description": "Tree-structured directory of OSINT tools organized by investigative starting point.",
+      "path": "11-RESOURCES\\OSINT\\OSINT-Framework",
+      "entryPatterns": [
+        "index.html",
+        "README.md"
+      ],
+      "onlineUrl": "https://osintframework.com/"
+    },
+    {
+      "name": "Bellingcat Investigation Toolkit",
+      "description": "Community-maintained open-source investigation tool descriptions, limitations, and use cases.",
+      "path": "11-RESOURCES\\OSINT\\Bellingcat-Toolkit",
+      "entryPatterns": [
+        "README.md",
+        "all-tools.md"
+      ],
+      "onlineUrl": "https://bellingcat.gitbook.io/toolkit"
+    }
+  ],
+  "onlineCategories": [
+    {
+      "name": "OSINT investigation",
+      "links": [
+        {
+          "name": "OSINT Framework",
+          "url": "https://osintframework.com/",
+          "description": "Tool directory organized around common OSINT investigation pivots."
+        },
+        {
+          "name": "Bellingcat Online Investigation Toolkit",
+          "url": "https://bellingcat.gitbook.io/toolkit",
+          "description": "Curated investigative tools with use cases, requirements, and limitations."
+        },
+        {
+          "name": "OSINT Dojo",
+          "url": "https://www.osintdojo.com/resources/",
+          "description": "Learning roadmaps, challenges, methodology, and resource lists."
+        },
+        {
+          "name": "WhatsMyName",
+          "url": "https://whatsmyname.app/",
+          "description": "Username enumeration across public websites."
+        },
+        {
+          "name": "Wayback Machine",
+          "url": "https://web.archive.org/",
+          "description": "Historical snapshots of public websites."
+        },
+        {
+          "name": "ICANN Lookup",
+          "url": "https://lookup.icann.org/",
+          "description": "Domain-registration and RDAP lookup service."
+        },
+        {
+          "name": "ExifTool Documentation",
+          "url": "https://exiftool.org/",
+          "description": "Metadata extraction and interpretation reference."
+        },
+        {
+          "name": "Google Earth",
+          "url": "https://earth.google.com/",
+          "description": "Geospatial, imagery, terrain, and historical-image investigation."
+        },
+        {
+          "name": "OpenCorporates",
+          "url": "https://opencorporates.com/",
+          "description": "Global public corporate-record search."
+        },
+        {
+          "name": "Have I Been Pwned",
+          "url": "https://haveibeenpwned.com/",
+          "description": "Authorized breach exposure checks for accounts and domains."
+        }
+      ]
+    },
+    {
+      "name": "Defensive standards and frameworks",
+      "links": [
+        {
+          "name": "CISA Cybersecurity Resources",
+          "url": "https://www.cisa.gov/resources-tools",
+          "description": "Federal guidance, advisories, tools, and configuration resources."
+        },
+        {
+          "name": "MITRE ATT&CK",
+          "url": "https://attack.mitre.org/",
+          "description": "Adversary behavior and technique knowledge base."
+        },
+        {
+          "name": "NIST Cybersecurity",
+          "url": "https://www.nist.gov/cybersecurity",
+          "description": "Standards, publications, frameworks, and cybersecurity guidance."
+        },
+        {
+          "name": "OWASP Cheat Sheets",
+          "url": "https://cheatsheetseries.owasp.org/",
+          "description": "Current rendered application-security guidance."
+        }
+      ]
+    },
+    {
+      "name": "DFIR and incident response",
+      "links": [
+        {
+          "name": "Eric Zimmerman's Tools",
+          "url": "https://ericzimmerman.github.io/#!index.md",
+          "description": "Windows forensic artifact-processing tools and documentation."
+        },
+        {
+          "name": "Volatility Foundation",
+          "url": "https://volatilityfoundation.org/",
+          "description": "Memory-forensics framework and project resources."
+        },
+        {
+          "name": "SANS DFIR Posters",
+          "url": "https://www.sans.org/posters",
+          "description": "Printable incident-response and forensic reference posters."
+        },
+        {
+          "name": "DFIR Artifact Museum",
+          "url": "https://github.com/AndrewRathbun/DFIRArtifactMuseum",
+          "description": "Sample artifacts for validating and learning forensic tooling."
+        }
+      ]
+    },
+    {
+      "name": "Pentest and research",
+      "links": [
+        {
+          "name": "GTFOBins",
+          "url": "https://gtfobins.github.io/",
+          "description": "Linux and Unix living-off-the-land techniques."
+        },
+        {
+          "name": "LOLBAS",
+          "url": "https://lolbas-project.github.io/",
+          "description": "Windows living-off-the-land reference."
+        },
+        {
+          "name": "HackTricks",
+          "url": "https://book.hacktricks.xyz/",
+          "description": "Pentesting and privilege-escalation knowledge base."
+        },
+        {
+          "name": "Exploit Database",
+          "url": "https://www.exploit-db.com/",
+          "description": "Public exploit and proof-of-concept archive."
+        }
+      ]
+    },
+    {
+      "name": "Help desk and vendor support",
+      "links": [
+        {
+          "name": "Microsoft Learn",
+          "url": "https://learn.microsoft.com/",
+          "description": "Windows, PowerShell, Azure, and Microsoft product documentation."
+        },
+        {
+          "name": "Sysinternals Documentation",
+          "url": "https://learn.microsoft.com/sysinternals/",
+          "description": "Official usage documentation for Sysinternals tools."
+        },
+        {
+          "name": "Wireshark Documentation",
+          "url": "https://www.wireshark.org/docs/",
+          "description": "Packet-analysis user guides and reference material."
+        },
+        {
+          "name": "Nmap Reference Guide",
+          "url": "https://nmap.org/book/man.html",
+          "description": "Official Nmap command and option reference."
+        }
+      ]
+    }
+  ]
+}
