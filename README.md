@@ -71,6 +71,22 @@ Every user builds their own local repository from upstream sources and remains r
 - Generated `START-HERE.html` dashboard
 - Help-desk, network, recovery, DFIR, OSINT, pentest-lab, and full-toolkit profiles
 
+## Easiest Windows launch
+
+Double-click:
+
+```text
+Start-UsbSwissArmyKnife.cmd
+```
+
+The launcher uses a process-scoped execution-policy bypass. It does not change the machine or user execution policy.
+
+For project tests, double-click:
+
+```text
+Run-ProjectTests.cmd
+```
+
 ## Quick start
 
 Requires Windows PowerShell 5.1 or PowerShell 7.
@@ -125,7 +141,7 @@ USB Swiss Army Knife is an independent community project. It is not affiliated w
 
 ## Status
 
-**v0.2.0-alpha**
+**v0.3.0-alpha**
 
 The project is under active development. Catalog entries, filenames, release patterns, signer names, and vendor workflows require testing across real Windows environments before a stable release.
 
@@ -142,3 +158,31 @@ Invoke-Pester -Path ./tests -Output Detailed
 ```powershell
 .\Usb-SwissArmyKnife.ps1 -Mode Provision -ProfileId helpdesk-32 -TargetDrive E: -DryRun
 ```
+
+
+## Environment setup
+
+The interactive menu now includes **Environment and developer tools**. It can:
+
+- Show execution-policy and dependency status
+- Install or repair the user-scoped NuGet provider
+- Register and trust PSGallery
+- Install Pester 5.5 or newer
+- Run metadata validation
+- Run the Pester suite
+
+The same setup is available directly:
+
+```powershell
+.\tools\Setup-DevelopmentEnvironment.ps1
+```
+
+## Dry-run plans
+
+Dry-run provisioning creates a local JSON plan under:
+
+```text
+%USERPROFILE%\usb-swiss-army-knife\00-ADMIN\logs
+```
+
+The plan records every source path, target path, and estimated byte count without writing to the USB.

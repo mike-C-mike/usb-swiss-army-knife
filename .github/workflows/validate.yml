@@ -15,4 +15,4 @@ jobs:
         run: Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force
       - name: Run tests
         shell: pwsh
-        run: Invoke-Pester -Path ./tests -Output Detailed
+        run: ./tools/Invoke-ProjectTests.ps1

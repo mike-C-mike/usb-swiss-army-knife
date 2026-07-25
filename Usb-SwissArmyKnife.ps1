@@ -57,7 +57,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$ScriptVersion = '0.6.0'
+$ScriptVersion = '0.7.0'
 
 function Write-Section {
     param([Parameter(Mandatory)][string]$Text)
@@ -819,16 +819,27 @@ function Confirm-Provisioning {
     Write-Host "Drive capacity: $(Get-FriendlySize -Bytes ([long]$Drive.Size))"
     Write-Host "Free space:     $(Get-FriendlySize -Bytes ([long]$Drive.FreeSpace))"
     Write-Host "Content size:   $(Get-FriendlySize -Bytes $RequiredBytes)"
-    Write-Host "Mode:           $(if ($MirrorMode) { 'MIRROR — obsolete destination files may be removed' } else { 'UPDATE — existing unrelated files are preserved' })"
+    $modeDescription = if ($DryRunMode) {
+        'DRY RUN — no files will be written to the target drive'
+    }
+    elseif ($MirrorMode) {
+        'MIRROR — obsolete destination files may be removed'
+    }
+    else {
+        'UPDATE — existing unrelated files are preserved'
+    }
 
-    if ($MirrorMode) {
+    Write-Host "Mode:           $modeDescription"
+
+    if ($MirrorMode -and -not $DryRunMode) {
         Write-Host ''
         Write-Host 'WARNING: Mirror mode may delete destination files inside managed profile folders.' `
             -ForegroundColor Red
     }
 
     Write-Host ''
-    $expected = "PROVISION $($Drive.DeviceID)".ToUpperInvariant()
+    $verb = if ($DryRunMode) { 'PREVIEW' } else { 'PROVISION' }
+    $expected = "$verb $($Drive.DeviceID)".ToUpperInvariant()
     $confirmation = Read-Host "Type '$expected' to continue"
     return ($confirmation.ToUpperInvariant() -ceq $expected)
 }
@@ -838,13 +849,16 @@ function Copy-ProfileContent {
         [Parameter(Mandatory)][string]$RepositoryRoot,
         [Parameter(Mandatory)]$Profile,
         [Parameter(Mandatory)][string]$DestinationRoot,
-        [Parameter(Mandatory)][bool]$MirrorMode
+        [Parameter(Mandatory)][bool]$MirrorMode,
+        [Parameter(Mandatory)][bool]$DryRunMode
     )
 
     $logRoot = Join-Path $RepositoryRoot '00-ADMIN\logs'
     New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
-    $copyLog = Join-Path $logRoot ('provision-{0}-{1}.log' -f `
-        $Profile.id, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $copyLog = Join-Path $logRoot ('provision-{0}-{1}.log' -f $Profile.id, $timestamp)
+    $planPath = Join-Path $logRoot ('provision-plan-{0}-{1}.json' -f $Profile.id, $timestamp)
+    $planItems = [System.Collections.Generic.List[object]]::new()
 
     foreach ($relativePath in @($Profile.includePaths)) {
         $source = Join-Path $RepositoryRoot $relativePath
@@ -856,22 +870,44 @@ function Copy-ProfileContent {
         $destination = Join-Path $DestinationRoot $relativePath
         $sourceItem = Get-Item -Path $source
 
-        if ($DryRunMode) { Write-Host "[DRY RUN] $source -> $destination" -ForegroundColor DarkCyan; continue }
+        if ($DryRunMode) {
+            $sourceBytes = if ($sourceItem.PSIsContainer) {
+                $measurement = Get-ChildItem -Path $source -File -Recurse -ErrorAction SilentlyContinue |
+                    Measure-Object -Property Length -Sum
+                if ($measurement.Sum) { [long]$measurement.Sum } else { 0 }
+            }
+            else {
+                [long]$sourceItem.Length
+            }
+
+            $planItems.Add([pscustomobject]@{
+                RelativePath = [string]$relativePath
+                Source       = [string]$source
+                Destination  = [string]$destination
+                SizeBytes    = $sourceBytes
+                Exists       = $true
+            })
+
+            Write-Host "[DRY RUN] $source -> $destination" -ForegroundColor DarkCyan
+            continue
+        }
 
         if ($sourceItem.PSIsContainer) {
             New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
+            $copyModeArgument = if ($MirrorMode) { '/MIR' } else { '/E' }
+
             $arguments = @(
-                $source,
-                $destination,
-                if ($MirrorMode) { '/MIR' } else { '/E' },
-                '/COPY:DAT',
-                '/DCOPY:DAT',
-                '/R:2',
-                '/W:2',
-                '/XJ',
-                '/FFT',
-                '/NP',
+                $source
+                $destination
+                $copyModeArgument
+                '/COPY:DAT'
+                '/DCOPY:DAT'
+                '/R:2'
+                '/W:2'
+                '/XJ'
+                '/FFT'
+                '/NP'
                 "/LOG+:$copyLog"
             )
 
@@ -888,7 +924,23 @@ function Copy-ProfileContent {
         }
     }
 
-    if ($DryRunMode) { return $copyLog }
+    if ($DryRunMode) {
+        $planDocument = [pscustomobject]@{
+            ProfileId      = [string]$Profile.id
+            ProfileName    = [string]$Profile.name
+            TargetDrive    = [string]$DestinationRoot
+            GeneratedUtc   = (Get-Date).ToUniversalTime().ToString('o')
+            BuilderVersion = $ScriptVersion
+            CopyMode       = if ($MirrorMode) { 'MirrorPreview' } else { 'UpdatePreview' }
+            Items          = @($planItems)
+            TotalBytes     = [long](($planItems | Measure-Object -Property SizeBytes -Sum).Sum)
+        }
+
+        $planDocument | ConvertTo-Json -Depth 8 |
+            Set-Content -Path $planPath -Encoding UTF8
+
+        return $planPath
+    }
 
     $profileManifest = [pscustomobject]@{
         ProfileId        = [string]$Profile.id
@@ -927,7 +979,8 @@ function Invoke-ProvisionProfile {
         [Parameter(Mandatory)][string]$RepositoryRoot,
         [Parameter(Mandatory)]$Profile,
         [Parameter(Mandatory)]$Drive,
-        [Parameter(Mandatory)][bool]$MirrorMode
+        [Parameter(Mandatory)][bool]$MirrorMode,
+        [Parameter(Mandatory)][bool]$DryRunMode
     )
 
     $requiredBytes = Get-RepositoryContentSize `
@@ -947,7 +1000,8 @@ function Invoke-ProvisionProfile {
         -Profile $Profile `
         -Drive $Drive `
         -RequiredBytes $requiredBytes `
-        -MirrorMode $MirrorMode)) {
+        -MirrorMode $MirrorMode `
+        -DryRunMode $DryRunMode)) {
         Write-Host 'Provisioning cancelled.' -ForegroundColor Yellow
         return
     }
@@ -961,11 +1015,21 @@ function Invoke-ProvisionProfile {
         -Profile $Profile `
         -DestinationRoot $destinationRoot `
         -MirrorMode $MirrorMode `
-        -DryRunMode $DryRun.IsPresent
+        -DryRunMode $DryRunMode
 
     Write-Host ''
-    if ($DryRun.IsPresent) { Write-Host 'Dry run completed. No files were written.' -ForegroundColor Green } else { Write-Host 'Provisioning completed successfully.' -ForegroundColor Green }
-    Write-Host "Copy log: $copyLog" -ForegroundColor DarkGray
+    if ($DryRunMode) {
+        Write-Host 'Dry run completed. No files were written.' -ForegroundColor Green
+    }
+    else {
+        Write-Host 'Provisioning completed successfully.' -ForegroundColor Green
+    }
+    if ($DryRunMode) {
+        Write-Host "Provisioning plan: $copyLog" -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host "Copy log: $copyLog" -ForegroundColor DarkGray
+    }
 }
 
 function Invoke-RepositoryOperation {
@@ -1036,7 +1100,8 @@ function Invoke-ProvisionSelection {
         -RepositoryRoot $RootPath `
         -Profile $selectedProfile `
         -Drive $selectedDrive `
-        -MirrorMode $Mirror.IsPresent
+        -MirrorMode $Mirror.IsPresent `
+        -DryRunMode $DryRun.IsPresent
 }
 
 
@@ -1442,6 +1507,184 @@ function Invoke-ProjectHealthCheck {
     foreach($e in $r.Errors){Write-Host "ERROR: $e" -ForegroundColor Red};if(-not $r.Passed){throw "Health check failed with $($r.Errors.Count) error(s)."};Write-Host 'Project metadata validation passed.' -ForegroundColor Green
 }
 
+
+function Get-EnvironmentStatus {
+    $powerShellVersion = $PSVersionTable.PSVersion.ToString()
+    $edition = if ($PSVersionTable.PSEdition) { $PSVersionTable.PSEdition } else { 'Desktop' }
+
+    $nuget = Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+
+    $pester = Get-Module -ListAvailable Pester |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+
+    $gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+    $robocopy = Get-Command robocopy.exe -ErrorAction SilentlyContinue
+    $git = Get-Command git.exe -ErrorAction SilentlyContinue
+
+    [pscustomobject]@{
+        PowerShellVersion = $powerShellVersion
+        PowerShellEdition = $edition
+        ExecutionPolicyProcess = [string](Get-ExecutionPolicy -Scope Process)
+        ExecutionPolicyCurrentUser = [string](Get-ExecutionPolicy -Scope CurrentUser)
+        ExecutionPolicyLocalMachine = [string](Get-ExecutionPolicy -Scope LocalMachine)
+        NuGetVersion = if ($nuget) { [string]$nuget.Version } else { 'Not installed' }
+        PesterVersion = if ($pester) { [string]$pester.Version } else { 'Not installed' }
+        PesterReady = [bool]($pester -and $pester.Version -ge [version]'5.5.0')
+        PSGalleryRegistered = [bool]$gallery
+        PSGalleryPolicy = if ($gallery) { [string]$gallery.InstallationPolicy } else { 'Not registered' }
+        RobocopyAvailable = [bool]$robocopy
+        GitAvailable = [bool]$git
+        RepositoryRoot = $RootPath
+        RepositoryExists = Test-Path $RootPath
+    }
+}
+
+function Show-EnvironmentStatus {
+    Write-Section 'Environment and Prerequisites'
+
+    $status = Get-EnvironmentStatus
+
+    Write-Host "PowerShell:              $($status.PowerShellVersion) ($($status.PowerShellEdition))"
+    Write-Host "Execution policy:"
+    Write-Host "  Process:               $($status.ExecutionPolicyProcess)"
+    Write-Host "  Current user:          $($status.ExecutionPolicyCurrentUser)"
+    Write-Host "  Local machine:         $($status.ExecutionPolicyLocalMachine)"
+    Write-Host "NuGet provider:          $($status.NuGetVersion)"
+    Write-Host "Pester:                  $($status.PesterVersion)"
+    Write-Host "PSGallery:               $($status.PSGalleryPolicy)"
+    Write-Host "Robocopy available:      $($status.RobocopyAvailable)"
+    Write-Host "Git available:           $($status.GitAvailable)"
+    Write-Host "Local toolkit repository:$($status.RepositoryExists)"
+    Write-Host ''
+
+    if (-not $status.PesterReady) {
+        Write-Host 'Pester 5.5.0 or newer is not ready for project tests.' -ForegroundColor Yellow
+    }
+    else {
+        Write-Host 'Pester is ready for project tests.' -ForegroundColor Green
+    }
+
+    if (-not $status.PSGalleryRegistered) {
+        Write-Host 'PSGallery is not registered.' -ForegroundColor Yellow
+    }
+
+    if (-not $status.RobocopyAvailable) {
+        Write-Host 'Robocopy is unavailable; USB folder provisioning cannot run.' -ForegroundColor Red
+    }
+}
+
+function Invoke-DevelopmentSetup {
+    Write-Section 'Development Environment Setup'
+    Write-Host 'This optional setup prepares NuGet, PSGallery, and Pester for local testing.'
+    Write-Host 'It does not change LocalMachine execution policy.'
+    Write-Host ''
+
+    $confirmation = Read-Host 'Type SETUP DEV to continue'
+    if ($confirmation -cne 'SETUP DEV') {
+        Write-Host 'Development setup cancelled.' -ForegroundColor Yellow
+        return
+    }
+
+    [Net.ServicePointManager]::SecurityProtocol = `
+        [Net.ServicePointManager]::SecurityProtocol -bor `
+        [Net.SecurityProtocolType]::Tls12
+
+    $nuget = Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+
+    if (-not $nuget -or $nuget.Version -lt [version]'2.8.5.201') {
+        Write-Host 'Installing the NuGet package provider...' -ForegroundColor Cyan
+        Install-PackageProvider `
+            -Name NuGet `
+            -MinimumVersion 2.8.5.201 `
+            -Scope CurrentUser `
+            -Force | Out-Null
+    }
+
+    $gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+    if (-not $gallery) {
+        Write-Host 'Registering the default PowerShell Gallery...' -ForegroundColor Cyan
+        Register-PSRepository -Default
+        $gallery = Get-PSRepository -Name PSGallery -ErrorAction Stop
+    }
+
+    if ($gallery.InstallationPolicy -ne 'Trusted') {
+        Write-Host 'Marking PSGallery as trusted for this user environment...' -ForegroundColor Cyan
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+    }
+
+    $pester = Get-Module -ListAvailable Pester |
+        Where-Object Version -ge [version]'5.5.0' |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+
+    if (-not $pester) {
+        Write-Host 'Installing Pester 5.5.0 or newer for the current user...' -ForegroundColor Cyan
+        Install-Module `
+            -Name Pester `
+            -MinimumVersion 5.5.0 `
+            -Repository PSGallery `
+            -Scope CurrentUser `
+            -Force `
+            -SkipPublisherCheck
+    }
+
+    Write-Host ''
+    Write-Host 'Development prerequisites are ready.' -ForegroundColor Green
+    Show-EnvironmentStatus
+}
+
+function Invoke-ProjectTestsFromMenu {
+    $runner = Join-Path $PSScriptRoot 'tools\Invoke-ProjectTests.ps1'
+    if (-not (Test-Path $runner)) {
+        throw "Test runner not found: $runner"
+    }
+
+    & $runner
+    if ($LASTEXITCODE -ne 0) {
+        throw "Project tests failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Show-EnvironmentMenu {
+    Write-Section 'Environment and Developer Tools'
+    Write-Host '[1] Show environment status'
+    Write-Host '[2] Set up NuGet, PSGallery, and Pester'
+    Write-Host '[3] Run project metadata validation'
+    Write-Host '[4] Run Pester tests'
+    Write-Host '[0] Back'
+    Write-Host ''
+}
+
+function Invoke-EnvironmentMenu {
+    while ($true) {
+        Show-EnvironmentMenu
+        $choice = Read-Host 'Choose an environment action'
+
+        try {
+            switch ($choice) {
+                '1' { Show-EnvironmentStatus }
+                '2' { Invoke-DevelopmentSetup }
+                '3' { Invoke-ProjectHealthCheck }
+                '4' { Invoke-ProjectTestsFromMenu }
+                '0' { return }
+                default { Write-Host 'Invalid environment-menu choice.' -ForegroundColor Red }
+            }
+        }
+        catch {
+            Write-Host ''
+            Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        }
+
+        Write-Host ''
+        Read-Host 'Press Enter to continue' | Out-Null
+    }
+}
+
 function Show-MainMenu {
     Write-Section "USB Swiss Army Knife v$ScriptVersion"
     Write-Host '[1] Initial repository build'
@@ -1450,9 +1693,10 @@ function Show-MainMenu {
     Write-Host '[4] Provision an individual USB'
     Write-Host '[5] Show USB module profiles'
     Write-Host '[6] Resources and references'
-    Write-Host '[7] Project health check'
-    Write-Host '[8] Open the local repository folder'
-    Write-Host '[9] Open START-HERE dashboard'
+    Write-Host '[7] Environment and developer tools'
+    Write-Host '[8] Project health check'
+    Write-Host '[9] Open the local repository folder'
+    Write-Host '[10] Open START-HERE dashboard'
     Write-Host '[0] Exit'
     Write-Host ''
 }
@@ -1475,9 +1719,10 @@ function Invoke-InteractiveMenu {
                     Show-Profiles -Profiles $profiles -RepositoryRoot $RootPath
                 }
                 '6' { Invoke-ResourceMenu }
-                '7' { Invoke-ProjectHealthCheck }
-                '8' { Start-Process explorer.exe -ArgumentList $RootPath }
-                '9' {
+                '7' { Invoke-EnvironmentMenu }
+                '8' { Invoke-ProjectHealthCheck }
+                '9' { Start-Process explorer.exe -ArgumentList $RootPath }
+                '10' {
                     $dashboard = Join-Path $RootPath '11-RESOURCES\START-HERE.html'
                     if (-not (Test-Path $dashboard)) {
                         $dashboard = Build-StartHereDashboard `
