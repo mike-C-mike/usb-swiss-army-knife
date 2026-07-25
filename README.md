@@ -125,6 +125,20 @@ USB Swiss Army Knife is an independent community project. It is not affiliated w
 
 ## Status
 
-**v0.1.0-alpha**
+**v0.2.0-alpha**
 
 The project is under active development. Catalog entries, filenames, release patterns, signer names, and vendor workflows require testing across real Windows environments before a stable release.
+
+
+## Development validation
+
+```powershell
+pwsh ./tools/Test-ProjectMetadata.ps1
+Invoke-Pester -Path ./tests -Output Detailed
+```
+
+## Dry-run provisioning
+
+```powershell
+.\Usb-SwissArmyKnife.ps1 -Mode Provision -ProfileId helpdesk-32 -TargetDrive E: -DryRun
+```

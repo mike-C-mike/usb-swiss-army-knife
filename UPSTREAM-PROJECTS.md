@@ -20,6 +20,13 @@ USB Swiss Army Knife retrieves the official Sysinternals Suite and organizes it 
 **Official source:** Microsoft Sysinternals  
 **Redistributed here:** No
 
+## 7-Zip
+
+7-Zip provides the standalone archive engine used to unpack portable `.7z` releases without permanent installation.
+
+**Credit:** Igor Pavlov and contributors  
+**Redistributed here:** No
+
 ## Rufus
 
 Rufus is one of the most dependable tools available for creating bootable USB media. Its small, portable executable has made operating-system installation and recovery media dramatically easier for countless users.

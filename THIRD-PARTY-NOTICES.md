@@ -9,6 +9,7 @@ The MIT License in this repository applies only to USB Swiss Army Knife’s orig
 | Upstream project | Primary purpose | Upstream terms | Distributed by this repository? |
 |---|---|---|---|
 | Microsoft Sysinternals | Windows diagnostics and administration | Microsoft terms | No |
+| 7-Zip | Portable archive extraction | LGPL-2.1-or-later with unRAR restriction | No |
 | Rufus | Bootable USB creation | GPL-3.0 | No |
 | Ventoy | Multiboot USB platform | GPL-3.0 | No |
 | Wireshark | Packet analysis | GPL-2.0-or-later | No |

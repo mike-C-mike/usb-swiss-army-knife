@@ -47,6 +47,8 @@ param(
 
     [switch]$Mirror,
 
+    [switch]$DryRun,
+
     [switch]$Force,
 
     [switch]$NoExtract
@@ -55,7 +57,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$ScriptVersion = '0.5.0'
+$ScriptVersion = '0.6.0'
 
 function Write-Section {
     param([Parameter(Mandatory)][string]$Text)
@@ -415,23 +417,32 @@ function Import-InteractiveItem {
     }
 }
 
+function Get-SevenZipExecutable {
+    param([Parameter(Mandatory)][string]$RepositoryRoot)
+    $candidates = @(
+        (Join-Path $RepositoryRoot '02-HELPDESK\Storage\7-Zip-Standalone\7zr.exe'),
+        "$env:ProgramFiles\7-Zip\7z.exe",
+        "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
+    ) | Where-Object { $_ -and (Test-Path $_) }
+    return $candidates | Select-Object -First 1
+}
+
 function Expand-DownloadedItem {
-    param(
-        [Parameter(Mandatory)][string]$ArchivePath,
-        [Parameter(Mandatory)][string]$DestinationFolder
-    )
-
-    if ([IO.Path]::GetExtension($ArchivePath).ToLowerInvariant() -ne '.zip') {
-        Write-Warning "Automatic extraction currently supports ZIP only: $ArchivePath"
-        return
+    param([Parameter(Mandatory)][string]$ArchivePath,[Parameter(Mandatory)][string]$DestinationFolder)
+    $extension=[IO.Path]::GetExtension($ArchivePath).ToLowerInvariant()
+    $extractPath=Join-Path $DestinationFolder 'extracted'
+    if(Test-Path $extractPath){Remove-Item $extractPath -Recurse -Force}
+    New-Item -ItemType Directory -Path $extractPath -Force|Out-Null
+    switch($extension){
+        '.zip' { Expand-Archive -Path $ArchivePath -DestinationPath $extractPath -Force }
+        '.7z' {
+            $sevenZip=Get-SevenZipExecutable -RepositoryRoot $RootPath
+            if(-not $sevenZip){Write-Warning '7-Zip helper unavailable; archive remains unextracted.';Remove-Item $extractPath -Recurse -Force;return}
+            & $sevenZip x $ArchivePath "-o$extractPath" -y|Out-Null
+            if($LASTEXITCODE -ne 0){throw "7-Zip extraction failed with exit code $LASTEXITCODE."}
+        }
+        default {Write-Warning "Unsupported archive type: $extension";Remove-Item $extractPath -Recurse -Force}
     }
-
-    $extractPath = Join-Path $DestinationFolder 'extracted'
-    if (Test-Path $extractPath) {
-        Remove-Item -Path $extractPath -Recurse -Force
-    }
-    New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
-    Expand-Archive -Path $ArchivePath -DestinationPath $extractPath -Force
 }
 
 function Read-Inventory {
@@ -797,7 +808,8 @@ function Confirm-Provisioning {
         [Parameter(Mandatory)]$Profile,
         [Parameter(Mandatory)]$Drive,
         [Parameter(Mandatory)][long]$RequiredBytes,
-        [Parameter(Mandatory)][bool]$MirrorMode
+        [Parameter(Mandatory)][bool]$MirrorMode,
+        [Parameter(Mandatory)][bool]$DryRunMode
     )
 
     Write-Section 'Confirm USB Provisioning'
@@ -844,6 +856,8 @@ function Copy-ProfileContent {
         $destination = Join-Path $DestinationRoot $relativePath
         $sourceItem = Get-Item -Path $source
 
+        if ($DryRunMode) { Write-Host "[DRY RUN] $source -> $destination" -ForegroundColor DarkCyan; continue }
+
         if ($sourceItem.PSIsContainer) {
             New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
@@ -873,6 +887,8 @@ function Copy-ProfileContent {
             Copy-Item -Path $source -Destination $destination -Force
         }
     }
+
+    if ($DryRunMode) { return $copyLog }
 
     $profileManifest = [pscustomobject]@{
         ProfileId        = [string]$Profile.id
@@ -944,10 +960,11 @@ function Invoke-ProvisionProfile {
         -RepositoryRoot $RepositoryRoot `
         -Profile $Profile `
         -DestinationRoot $destinationRoot `
-        -MirrorMode $MirrorMode
+        -MirrorMode $MirrorMode `
+        -DryRunMode $DryRun.IsPresent
 
     Write-Host ''
-    Write-Host 'Provisioning completed successfully.' -ForegroundColor Green
+    if ($DryRun.IsPresent) { Write-Host 'Dry run completed. No files were written.' -ForegroundColor Green } else { Write-Host 'Provisioning completed successfully.' -ForegroundColor Green }
     Write-Host "Copy log: $copyLog" -ForegroundColor DarkGray
 }
 
@@ -1406,6 +1423,25 @@ function Invoke-ResourceMenu {
     }
 }
 
+function Test-CatalogMetadata {
+    param([Parameter(Mandatory)]$Catalog,[Parameter(Mandatory)]$Bookmarks,[Parameter(Mandatory)]$Profiles)
+    $errors=[System.Collections.Generic.List[string]]::new();$warnings=[System.Collections.Generic.List[string]]::new();$seen=@{}
+    foreach($item in @($Catalog.items)){
+        foreach($field in @('id','name','category','destination','sourceType','installPolicy')){if(-not $item.PSObject.Properties.Name.Contains($field)-or[string]::IsNullOrWhiteSpace([string]$item.$field)){$errors.Add("$($item.id): missing '$field'")}}
+        if($seen.ContainsKey([string]$item.id)){$errors.Add("Duplicate catalog id: $($item.id)")}else{$seen[[string]$item.id]=$true}
+        if($item.destination -match '(^|\\)(\.\.)(\\|$)'){$errors.Add("$($item.id): destination contains path traversal")}
+        if($item.sourceType -ne 'InteractiveImport' -and -not $item.allowedHosts){$errors.Add("$($item.id): automated source lacks allowedHosts")}
+    }
+    $pseen=@{};foreach($profile in @($Profiles.profiles)){if(-not $profile.id -or -not $profile.name -or -not $profile.minimumSizeGB -or -not $profile.includePaths){$errors.Add('Profile missing required metadata')}elseif($pseen.ContainsKey([string]$profile.id)){$errors.Add("Duplicate profile id: $($profile.id)")}else{$pseen[[string]$profile.id]=$true}}
+    foreach($r in @($Bookmarks.offlineResources)){if(-not $r.name -or -not $r.path -or -not $r.onlineUrl){$errors.Add('Offline resource missing name, path, or onlineUrl')}}
+    [pscustomobject]@{Passed=($errors.Count-eq 0);Errors=@($errors);Warnings=@($warnings);CatalogItems=@($Catalog.items).Count;Profiles=@($Profiles.profiles).Count;OfflineResources=@($Bookmarks.offlineResources).Count}
+}
+function Invoke-ProjectHealthCheck {
+    Write-Section 'Project Health Check';$c=Get-Catalog $CatalogPath;$p=Get-Content $ProfilesPath -Raw|ConvertFrom-Json;$b=Get-Bookmarks $BookmarksPath;$r=Test-CatalogMetadata $c $b $p
+    Write-Host "Catalog items: $($r.CatalogItems)";Write-Host "USB profiles: $($r.Profiles)";Write-Host "Offline resources: $($r.OfflineResources)"
+    foreach($e in $r.Errors){Write-Host "ERROR: $e" -ForegroundColor Red};if(-not $r.Passed){throw "Health check failed with $($r.Errors.Count) error(s)."};Write-Host 'Project metadata validation passed.' -ForegroundColor Green
+}
+
 function Show-MainMenu {
     Write-Section "USB Swiss Army Knife v$ScriptVersion"
     Write-Host '[1] Initial repository build'
@@ -1414,8 +1450,9 @@ function Show-MainMenu {
     Write-Host '[4] Provision an individual USB'
     Write-Host '[5] Show USB module profiles'
     Write-Host '[6] Resources and references'
-    Write-Host '[7] Open the local repository folder'
-    Write-Host '[8] Open START-HERE dashboard'
+    Write-Host '[7] Project health check'
+    Write-Host '[8] Open the local repository folder'
+    Write-Host '[9] Open START-HERE dashboard'
     Write-Host '[0] Exit'
     Write-Host ''
 }
@@ -1438,8 +1475,9 @@ function Invoke-InteractiveMenu {
                     Show-Profiles -Profiles $profiles -RepositoryRoot $RootPath
                 }
                 '6' { Invoke-ResourceMenu }
-                '7' { Start-Process explorer.exe -ArgumentList $RootPath }
-                '8' {
+                '7' { Invoke-ProjectHealthCheck }
+                '8' { Start-Process explorer.exe -ArgumentList $RootPath }
+                '9' {
                     $dashboard = Join-Path $RootPath '11-RESOURCES\START-HERE.html'
                     if (-not (Test-Path $dashboard)) {
                         $dashboard = Build-StartHereDashboard `

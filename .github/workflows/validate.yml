@@ -1,0 +1,18 @@
+name: Validate repository
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate metadata
+        shell: pwsh
+        run: ./tools/Test-ProjectMetadata.ps1
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force
+      - name: Run tests
+        shell: pwsh
+        run: Invoke-Pester -Path ./tests -Output Detailed

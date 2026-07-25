@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 5,
-  "notes": "v0.5 adds an OSINT reference bundle and official portable Hashcat for Windows.",
+  "schemaVersion": 6,
+  "notes": "Alpha hardening round: 7-Zip helper, Hashcat extraction, validation, dry-run provisioning.",
   "items": [
     {
       "id": "microsoft-sysinternals-suite",
@@ -52,6 +52,29 @@
       "extract": true,
       "signaturePolicy": "None",
       "installPolicy": "Never"
+    },
+    {
+      "id": "7zip-standalone-console",
+      "name": "7-Zip Standalone Console",
+      "category": "Help Desk / Archive Utility",
+      "destination": "02-HELPDESK\\Storage\\7-Zip-Standalone",
+      "sourceType": "Direct",
+      "version": "rolling",
+      "url": "https://www.7-zip.org/a/7zr.exe",
+      "fileName": "7zr.exe",
+      "allowedHosts": [
+        "7-zip.org",
+        "www.7-zip.org"
+      ],
+      "extract": false,
+      "signaturePolicy": "Preferred",
+      "expectedSignerRegex": "Igor Pavlov",
+      "installPolicy": "Never",
+      "publisher": "Igor Pavlov / 7-Zip",
+      "officialWebsite": "https://www.7-zip.org/",
+      "licenseId": "LGPL-2.1-or-later with unRAR restriction",
+      "redistributionPolicy": "Never",
+      "creditStatement": "All credit belongs to Igor Pavlov and the 7-Zip contributors."
     },
     {
       "id": "magnet-dumpit-windows",
@@ -362,10 +385,11 @@
         "objects.githubusercontent.com",
         "githubusercontent.com"
       ],
-      "extract": false,
+      "extract": true,
       "signaturePolicy": "None",
       "installPolicy": "Never",
-      "usageNotice": "Use only for password recovery, audits, or testing where you own the hashes or have explicit authorization."
+      "usageNotice": "Use only for password recovery, audits, or testing where you own the hashes or have explicit authorization.",
+      "extractionDependency": "7zip-standalone-console"
     },
     {
       "id": "osint-framework-repository",
