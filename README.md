@@ -107,14 +107,15 @@ Run without parameters to open the guided menu.
 ## Main menu
 
 ```text
-[1] Initial repository build
-[2] Update software repository
-[3] Audit for missing or changed items
-[4] Provision an individual USB
-[5] Show USB module profiles
-[6] Resources and references
-[7] Open the local repository folder
-[8] Open START-HERE dashboard
+[1] Guided toolkit build
+[2] Maintenance and updates
+[3] Provision an individual USB
+[4] Show USB module profiles
+[5] Resources and references
+[6] Environment and developer tools
+[7] Project health check
+[8] Open the local repository folder
+[9] Open START-HERE dashboard
 [0] Exit
 ```
 
@@ -141,7 +142,7 @@ USB Swiss Army Knife is an independent community project. It is not affiliated w
 
 ## Status
 
-**v0.3.0-alpha**
+**v0.5.0-alpha**
 
 The project is under active development. Catalog entries, filenames, release patterns, signer names, and vendor workflows require testing across real Windows environments before a stable release.
 
@@ -186,3 +187,83 @@ Dry-run provisioning creates a local JSON plan under:
 ```
 
 The plan records every source path, target path, and estimated byte count without writing to the USB.
+
+
+## Guided builds
+
+The initial build is now preset-driven. Available presets include:
+
+- Recommended Starter Toolkit
+- Help Desk and Endpoint Support
+- Network Troubleshooting and Analysis
+- DFIR Acquisition and Recovery
+- OSINT Reference Toolkit
+- Authorized Pentest Lab
+- Complete Catalog
+
+Each preset explicitly lists its catalog item IDs in `config/build-presets.json`.
+Presets disclose whether they will trigger interactive vendor-download pages.
+
+Command-line example:
+
+```powershell
+.\Usb-SwissArmyKnife.ps1 -PresetId recommended
+```
+
+## Installed-items-only updates
+
+The recommended maintenance path updates only items already present in the local
+inventory. This prevents a routine update from unexpectedly launching every gated
+vendor workflow in the full catalog.
+
+## Support bundles
+
+Create a source-only diagnostic bundle from the menu or run:
+
+```powershell
+.\tools\Export-SupportBundle.ps1
+```
+
+The bundle excludes third-party software and downloaded content. Review logs before
+sharing because they can contain local filesystem paths.
+
+
+## Empty profile folders
+
+Profiles may reference folders that have not been populated yet. Those folders now
+count as zero bytes during profile display and provisioning checks. Missing optional
+folders are skipped with warnings during the copy phase rather than breaking the
+capacity calculation.
+
+
+## Redirecting the toolkit repository
+
+The builder no longer assumes the user-profile folder must remain the destination.
+
+At startup and from major menus, press:
+
+```text
+R
+```
+
+Then choose:
+
+- The default `%USERPROFILE%\usb-swiss-army-knife`
+- An attached USB or external drive
+- A custom folder path
+
+When a removable drive is selected, the repository is stored under:
+
+```text
+E:\usb-swiss-army-knife
+```
+
+All subsequent builds, updates, resource downloads, inventories, logs, dashboards,
+and support bundles follow the active repository for that session.
+
+Before a write-oriented operation begins, the builder displays the active repository
+and allows the user to continue, redirect it, or cancel.
+
+The repository location and the provisioning target are separate concepts. For
+example, a 2TB SSD can hold the master repository while a 32GB USB receives the
+Help Desk profile.

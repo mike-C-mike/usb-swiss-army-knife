@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "recommended",
+      "name": "Recommended Starter Toolkit",
+      "description": "Core portable help-desk, networking, recovery, offline reference, and OSINT tools without gated vendor forms.",
+      "includesInteractiveDownloads": false,
+      "itemIds": [
+        "microsoft-sysinternals-suite",
+        "rufus-portable",
+        "ventoy-windows",
+        "7zip-standalone-console",
+        "winpmem-signed",
+        "testdisk-photorec-windows",
+        "cyberchef-offline",
+        "gtfobins-repository",
+        "lolbas-repository",
+        "owasp-cheat-sheet-series",
+        "osint-framework-repository",
+        "bellingcat-osint-toolkit"
+      ]
+    },
+    {
+      "id": "helpdesk",
+      "name": "Help Desk and Endpoint Support",
+      "description": "Windows diagnostics, boot-media preparation, packet analysis, packet-capture driver installer, and file recovery.",
+      "includesInteractiveDownloads": true,
+      "itemIds": [
+        "microsoft-sysinternals-suite",
+        "rufus-portable",
+        "ventoy-windows",
+        "7zip-standalone-console",
+        "wireshark-portable-windows",
+        "npcap-installer",
+        "testdisk-photorec-windows",
+        "cyberchef-offline"
+      ]
+    },
+    {
+      "id": "network",
+      "name": "Network Troubleshooting and Analysis",
+      "description": "Portable Wireshark, Npcap installer, CyberChef, Sysinternals, and networking-oriented references.",
+      "includesInteractiveDownloads": true,
+      "itemIds": [
+        "microsoft-sysinternals-suite",
+        "7zip-standalone-console",
+        "wireshark-portable-windows",
+        "npcap-installer",
+        "cyberchef-offline",
+        "owasp-cheat-sheet-series"
+      ]
+    },
+    {
+      "id": "dfir",
+      "name": "DFIR Acquisition and Recovery",
+      "description": "Memory and disk acquisition choices, recovery tooling, forensic references, and gated vendor workflows.",
+      "includesInteractiveDownloads": true,
+      "itemIds": [
+        "7zip-standalone-console",
+        "magnet-dumpit-windows",
+        "magnet-acquire",
+        "belkasoft-live-ram-capturer",
+        "winpmem-signed",
+        "testdisk-photorec-windows",
+        "ftk-imager-windows",
+        "cyberchef-offline"
+      ]
+    },
+    {
+      "id": "osint",
+      "name": "OSINT Reference Toolkit",
+      "description": "CyberChef, OSINT Framework, Bellingcat toolkit source, and the local reference dashboard.",
+      "includesInteractiveDownloads": false,
+      "itemIds": [
+        "cyberchef-offline",
+        "osint-framework-repository",
+        "bellingcat-osint-toolkit"
+      ]
+    },
+    {
+      "id": "pentest-lab",
+      "name": "Authorized Pentest Lab",
+      "description": "Hashcat, SecLists, living-off-the-land references, web-security references, CyberChef, and packet analysis.",
+      "includesInteractiveDownloads": true,
+      "itemIds": [
+        "7zip-standalone-console",
+        "wireshark-portable-windows",
+        "npcap-installer",
+        "cyberchef-offline",
+        "gtfobins-repository",
+        "lolbas-repository",
+        "owasp-cheat-sheet-series",
+        "seclists-repository",
+        "payloads-all-the-things",
+        "hacktricks-repository",
+        "hashcat-windows"
+      ]
+    },
+    {
+      "id": "full",
+      "name": "Complete Catalog",
+      "description": "Every catalog item, including all gated vendor interactions and large security reference repositories.",
+      "includesInteractiveDownloads": true,
+      "itemIds": [
+        "microsoft-sysinternals-suite",
+        "rufus-portable",
+        "ventoy-windows",
+        "7zip-standalone-console",
+        "magnet-dumpit-windows",
+        "magnet-acquire",
+        "belkasoft-live-ram-capturer",
+        "wireshark-portable-windows",
+        "npcap-installer",
+        "winpmem-signed",
+        "testdisk-photorec-windows",
+        "ftk-imager-windows",
+        "cyberchef-offline",
+        "gtfobins-repository",
+        "lolbas-repository",
+        "owasp-cheat-sheet-series",
+        "seclists-repository",
+        "payloads-all-the-things",
+        "hacktricks-repository",
+        "hashcat-windows",
+        "osint-framework-repository",
+        "bellingcat-osint-toolkit"
+      ]
+    }
+  ]
+}

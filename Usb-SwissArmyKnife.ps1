@@ -37,11 +37,15 @@ param(
 
     [string]$BookmarksPath = (Join-Path $PSScriptRoot 'config\bookmarks.json'),
 
+    [string]$BuildPresetsPath = (Join-Path $PSScriptRoot 'config\build-presets.json'),
+
     [string]$DownloadsPath = (Join-Path $HOME 'Downloads'),
 
     [int]$InteractiveTimeoutMinutes = 30,
 
     [string]$ProfileId,
+
+    [string]$PresetId,
 
     [string]$TargetDrive,
 
@@ -57,7 +61,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$ScriptVersion = '0.7.0'
+$ScriptVersion = '0.9.0'
 
 function Write-Section {
     param([Parameter(Mandatory)][string]$Text)
@@ -436,7 +440,7 @@ function Expand-DownloadedItem {
     switch($extension){
         '.zip' { Expand-Archive -Path $ArchivePath -DestinationPath $extractPath -Force }
         '.7z' {
-            $sevenZip=Get-SevenZipExecutable -RepositoryRoot $RootPath
+            $sevenZip=Get-SevenZipExecutable -RepositoryRoot $script:RootPath
             if(-not $sevenZip){Write-Warning '7-Zip helper unavailable; archive remains unextracted.';Remove-Item $extractPath -Recurse -Force;return}
             & $sevenZip x $ArchivePath "-o$extractPath" -y|Out-Null
             if($LASTEXITCODE -ne 0){throw "7-Zip extraction failed with exit code $LASTEXITCODE."}
@@ -635,6 +639,240 @@ function Invoke-CatalogProcessing {
 }
 
 
+
+function Get-DefaultRepositoryPath {
+    return (Join-Path $HOME 'usb-swiss-army-knife')
+}
+
+function Get-RepositoryDriveCandidates {
+    $systemDrive = $env:SystemDrive.TrimEnd('\')
+
+    return @(
+        Get-CimInstance Win32_LogicalDisk |
+        Where-Object {
+            $_.DeviceID -ne $systemDrive -and
+            $_.DriveType -in 2, 3 -and
+            $_.Size -gt 0
+        } |
+        Sort-Object DeviceID
+    )
+}
+
+function Show-ActiveRepository {
+    Write-Host ''
+    Write-Host "Active toolkit repository: $script:RootPath" -ForegroundColor Green
+    if (Test-Path $script:RootPath) {
+        try {
+            $driveRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($script:RootPath))
+            $drive = Get-CimInstance Win32_LogicalDisk |
+                Where-Object DeviceID -eq $driveRoot.TrimEnd('\')
+
+            if ($drive) {
+                Write-Host ("Repository drive: {0} free of {1}" -f `
+                    (Get-FriendlySize -Bytes ([long]$drive.FreeSpace)),
+                    (Get-FriendlySize -Bytes ([long]$drive.Size))) `
+                    -ForegroundColor DarkGray
+            }
+        }
+        catch {
+            Write-Host 'Repository drive capacity could not be determined.' -ForegroundColor DarkGray
+        }
+    }
+    else {
+        Write-Host 'Repository folder has not been created yet.' -ForegroundColor DarkGray
+    }
+}
+
+function Set-ActiveRepositoryPath {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [switch]$Create
+    )
+
+    $expanded = [Environment]::ExpandEnvironmentVariables($Path.Trim())
+    if ([string]::IsNullOrWhiteSpace($expanded)) {
+        throw 'Repository path cannot be empty.'
+    }
+
+    try {
+        $fullPath = [IO.Path]::GetFullPath($expanded)
+    }
+    catch {
+        throw "Repository path is invalid: $expanded"
+    }
+
+    $systemRoot = "$($env:SystemDrive)\"
+    if ($fullPath.TrimEnd('\') -ieq $systemRoot.TrimEnd('\')) {
+        throw 'The repository cannot be the root of the Windows system drive.'
+    }
+
+    if ($Create) {
+        New-RepositoryStructure -Path $fullPath
+    }
+
+    $script:RootPath = $fullPath
+    Write-Host ''
+    Write-Host "Active toolkit repository changed to:" -ForegroundColor Green
+    Write-Host "  $script:RootPath" -ForegroundColor Cyan
+}
+
+function Select-RepositoryDriveInteractive {
+    $drives = Get-RepositoryDriveCandidates
+    if ($drives.Count -eq 0) {
+        Write-Host 'No eligible removable or secondary drives were found.' -ForegroundColor Yellow
+        return $null
+    }
+
+    Write-Section 'Select Repository Drive'
+    for ($index = 0; $index -lt $drives.Count; $index++) {
+        $drive = $drives[$index]
+        $label = if ($drive.VolumeName) { $drive.VolumeName } else { '(no label)' }
+
+        Write-Host ("[{0}] {1}  {2}  {3} free of {4}" -f `
+            ($index + 1),
+            $drive.DeviceID,
+            $label,
+            (Get-FriendlySize -Bytes ([long]$drive.FreeSpace)),
+            (Get-FriendlySize -Bytes ([long]$drive.Size)))
+    }
+
+    while ($true) {
+        Write-Host ''
+        $selection = Read-Host 'Select a drive number, or Q to cancel'
+        if ($selection -match '^(q|quit|cancel)$') {
+            return $null
+        }
+
+        [int]$number = 0
+        if ([int]::TryParse($selection, [ref]$number) -and
+            $number -ge 1 -and $number -le $drives.Count) {
+            return $drives[$number - 1]
+        }
+
+        Write-Host 'Invalid drive selection.' -ForegroundColor Red
+    }
+}
+
+function Show-RepositoryLocationMenu {
+    Write-Section 'Toolkit Repository Location'
+    Show-ActiveRepository
+    Write-Host ''
+    Write-Host '[1] Use the default user-profile repository'
+    Write-Host '[2] Select an attached USB or external drive'
+    Write-Host '[3] Enter a custom folder path'
+    Write-Host '[4] Open the active repository'
+    Write-Host '[0] Cancel'
+    Write-Host ''
+}
+
+function Invoke-RepositoryLocationMenu {
+    while ($true) {
+        Show-RepositoryLocationMenu
+        $choice = Read-Host 'Choose a repository location action'
+
+        try {
+            switch ($choice) {
+                '1' {
+                    $defaultPath = Get-DefaultRepositoryPath
+                    Set-ActiveRepositoryPath -Path $defaultPath -Create
+                    return
+                }
+                '2' {
+                    $drive = Select-RepositoryDriveInteractive
+                    if ($drive) {
+                        $newPath = Join-Path "$($drive.DeviceID)\" 'usb-swiss-army-knife'
+
+                        Write-Host ''
+                        Write-Host "Selected drive: $($drive.DeviceID)"
+                        Write-Host "Repository folder: $newPath"
+                        Write-Host ''
+                        $expected = "USE $($drive.DeviceID)".ToUpperInvariant()
+                        $confirmation = Read-Host "Type '$expected' to continue"
+
+                        if ($confirmation.ToUpperInvariant() -ceq $expected) {
+                            Set-ActiveRepositoryPath -Path $newPath -Create
+                            return
+                        }
+
+                        Write-Host 'Repository change cancelled.' -ForegroundColor Yellow
+                    }
+                }
+                '3' {
+                    $custom = Read-Host 'Enter the full repository folder path'
+                    if (-not [string]::IsNullOrWhiteSpace($custom)) {
+                        Write-Host ''
+                        Write-Host "Requested repository: $custom"
+                        $confirmation = Read-Host 'Type USE CUSTOM to continue'
+
+                        if ($confirmation -ceq 'USE CUSTOM') {
+                            Set-ActiveRepositoryPath -Path $custom -Create
+                            return
+                        }
+
+                        Write-Host 'Repository change cancelled.' -ForegroundColor Yellow
+                    }
+                }
+                '4' {
+                    New-RepositoryStructure -Path $script:RootPath
+                    Start-Process explorer.exe -ArgumentList $script:RootPath
+                }
+                '0' {
+                    return
+                }
+                default {
+                    Write-Host 'Invalid repository-location choice.' -ForegroundColor Red
+                }
+            }
+        }
+        catch {
+            Write-Host ''
+            Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        }
+
+        Write-Host ''
+        Read-Host 'Press Enter to continue' | Out-Null
+    }
+}
+
+function Confirm-ActiveRepositoryForOperation {
+    param([Parameter(Mandatory)][string]$OperationName)
+
+    New-RepositoryStructure -Path $script:RootPath
+
+    Write-Section "Confirm Destination — $OperationName"
+    Show-ActiveRepository
+    Write-Host ''
+    Write-Host '[Enter] Continue with this repository'
+    Write-Host '[R] Change repository location'
+    Write-Host '[Q] Cancel'
+    Write-Host ''
+
+    while ($true) {
+        $choice = Read-Host 'Choose an action'
+
+        if ([string]::IsNullOrWhiteSpace($choice)) {
+            return $true
+        }
+
+        switch -Regex ($choice) {
+            '^(r|repository|location)$' {
+                Invoke-RepositoryLocationMenu
+                Show-ActiveRepository
+                Write-Host ''
+                Write-Host '[Enter] Continue with this repository'
+                Write-Host '[R] Change repository location'
+                Write-Host '[Q] Cancel'
+            }
+            '^(q|quit|cancel)$' {
+                return $false
+            }
+            default {
+                Write-Host 'Press Enter, R, or Q.' -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
 function Get-Profiles {
     param([Parameter(Mandatory)][string]$Path)
 
@@ -659,6 +897,58 @@ function Get-FriendlySize {
     return "$Bytes bytes"
 }
 
+function Get-PathContentSize {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return [long]0
+    }
+
+    $item = Get-Item -LiteralPath $Path -Force
+    if (-not $item.PSIsContainer) {
+        return [long]$item.Length
+    }
+
+    [long]$total = 0
+    foreach ($file in @(Get-ChildItem `
+        -LiteralPath $Path `
+        -File `
+        -Recurse `
+        -Force `
+        -ErrorAction SilentlyContinue)) {
+
+        if ($null -ne $file.Length) {
+            $total += [long]$file.Length
+        }
+    }
+
+    return $total
+}
+
+function Get-ObjectSizeTotal {
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.IEnumerable]$Items,
+
+        [Parameter(Mandatory)]
+        [string]$PropertyName
+    )
+
+    [long]$total = 0
+    foreach ($item in @($Items)) {
+        if ($null -eq $item) {
+            continue
+        }
+
+        $property = $item.PSObject.Properties[$PropertyName]
+        if ($null -ne $property -and $null -ne $property.Value) {
+            $total += [long]$property.Value
+        }
+    }
+
+    return $total
+}
+
 function Get-RepositoryContentSize {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
@@ -667,19 +957,14 @@ function Get-RepositoryContentSize {
 
     [long]$total = 0
     foreach ($relativePath in @($Profile.includePaths)) {
-        $source = Join-Path $RepositoryRoot $relativePath
-        if (Test-Path $source) {
-            $item = Get-Item -Path $source
-            if ($item.PSIsContainer) {
-                $measure = Get-ChildItem -Path $source -File -Recurse -ErrorAction SilentlyContinue |
-                    Measure-Object -Property Length -Sum
-                if ($measure.Sum) { $total += [long]$measure.Sum }
-            }
-            else {
-                $total += [long]$item.Length
-            }
+        if ([string]::IsNullOrWhiteSpace([string]$relativePath)) {
+            continue
         }
+
+        $source = Join-Path $RepositoryRoot $relativePath
+        $total += Get-PathContentSize -Path $source
     }
+
     return $total
 }
 
@@ -871,14 +1156,7 @@ function Copy-ProfileContent {
         $sourceItem = Get-Item -Path $source
 
         if ($DryRunMode) {
-            $sourceBytes = if ($sourceItem.PSIsContainer) {
-                $measurement = Get-ChildItem -Path $source -File -Recurse -ErrorAction SilentlyContinue |
-                    Measure-Object -Property Length -Sum
-                if ($measurement.Sum) { [long]$measurement.Sum } else { 0 }
-            }
-            else {
-                [long]$sourceItem.Length
-            }
+            $sourceBytes = Get-PathContentSize -Path $source
 
             $planItems.Add([pscustomobject]@{
                 RelativePath = [string]$relativePath
@@ -933,7 +1211,7 @@ function Copy-ProfileContent {
             BuilderVersion = $ScriptVersion
             CopyMode       = if ($MirrorMode) { 'MirrorPreview' } else { 'UpdatePreview' }
             Items          = @($planItems)
-            TotalBytes     = [long](($planItems | Measure-Object -Property SizeBytes -Sum).Sum)
+            TotalBytes     = Get-ObjectSizeTotal -Items $planItems -PropertyName 'SizeBytes'
         }
 
         $planDocument | ConvertTo-Json -Depth 8 |
@@ -1038,27 +1316,37 @@ function Invoke-RepositoryOperation {
         [string]$Operation
     )
 
-    New-RepositoryStructure -Path $RootPath
+    if (-not (Confirm-ActiveRepositoryForOperation -OperationName $Operation)) {
+        Write-Host "$Operation cancelled." -ForegroundColor Yellow
+        return
+    }
+
+    New-RepositoryStructure -Path $script:RootPath
     $catalog = Get-Catalog -Path $CatalogPath
 
     Copy-Item `
         -Path $CatalogPath `
-        -Destination (Join-Path $RootPath '00-ADMIN\manifests\catalog.json') `
+        -Destination (Join-Path $script:RootPath '00-ADMIN\manifests\catalog.json') `
         -Force
 
     Copy-Item `
         -Path $ProfilesPath `
-        -Destination (Join-Path $RootPath '00-ADMIN\manifests\profiles.json') `
+        -Destination (Join-Path $script:RootPath '00-ADMIN\manifests\profiles.json') `
         -Force
 
-    $logPath = Join-Path $RootPath ('00-ADMIN\logs\{0}-{1}.log' -f `
+    Copy-Item `
+        -Path $BuildPresetsPath `
+        -Destination (Join-Path $script:RootPath '00-ADMIN\manifests\build-presets.json') `
+        -Force
+
+    $logPath = Join-Path $script:RootPath ('00-ADMIN\logs\{0}-{1}.log' -f `
         (Get-Date -Format 'yyyyMMdd-HHmmss'), $Operation.ToLowerInvariant())
 
     Start-Transcript -Path $logPath -Force | Out-Null
     try {
         Invoke-CatalogProcessing `
             -Catalog $catalog `
-            -RepositoryRoot $RootPath `
+            -RepositoryRoot $script:RootPath `
             -Operation $Operation
     }
     finally {
@@ -1083,7 +1371,7 @@ function Invoke-ProvisionSelection {
     else {
         $selectedProfile = Select-ProfileInteractive `
             -Profiles $profiles `
-            -RepositoryRoot $RootPath
+            -RepositoryRoot $script:RootPath
         if (-not $selectedProfile) { return }
     }
 
@@ -1097,7 +1385,7 @@ function Invoke-ProvisionSelection {
     if (-not $selectedDrive) { return }
 
     Invoke-ProvisionProfile `
-        -RepositoryRoot $RootPath `
+        -RepositoryRoot $script:RootPath `
         -Profile $selectedProfile `
         -Drive $selectedDrive `
         -MirrorMode $Mirror.IsPresent `
@@ -1350,7 +1638,12 @@ function Invoke-ResourceOperation {
         [string]$Operation
     )
 
-    New-RepositoryStructure -Path $RootPath
+    if (-not (Confirm-ActiveRepositoryForOperation -OperationName "Resources — $Operation")) {
+        Write-Host 'Resource operation cancelled.' -ForegroundColor Yellow
+        return
+    }
+
+    New-RepositoryStructure -Path $script:RootPath
     $catalog = Get-Catalog -Path $CatalogPath
     $resourceCatalog = Get-ResourceCatalog `
         -Catalog $catalog `
@@ -1360,19 +1653,19 @@ function Invoke-ResourceOperation {
         throw "No catalog resources matched bundle(s): $($BundleIds -join ', ')"
     }
 
-    $logPath = Join-Path $RootPath ('00-ADMIN\logs\{0}-resources-{1}.log' -f `
+    $logPath = Join-Path $script:RootPath ('00-ADMIN\logs\{0}-resources-{1}.log' -f `
         (Get-Date -Format 'yyyyMMdd-HHmmss'), $Operation.ToLowerInvariant())
 
     Start-Transcript -Path $logPath -Force | Out-Null
     try {
         Invoke-CatalogProcessing `
             -Catalog $resourceCatalog `
-            -RepositoryRoot $RootPath `
+            -RepositoryRoot $script:RootPath `
             -Operation $Operation
 
         if ($Operation -ne 'Audit') {
             Build-StartHereDashboard `
-                -RepositoryRoot $RootPath `
+                -RepositoryRoot $script:RootPath `
                 -BookmarksFile $BookmarksPath | Out-Null
         }
     }
@@ -1385,6 +1678,7 @@ function Invoke-ResourceOperation {
 
 function Show-ResourceMenu {
     Write-Section 'Resources and References'
+    Show-ActiveRepository
     Write-Host '[1] Install recommended offline resources'
     Write-Host '[2] Install or update CyberChef only'
     Write-Host '[3] Install living-off-the-land references'
@@ -1395,6 +1689,7 @@ function Show-ResourceMenu {
     Write-Host '[8] Audit resource files'
     Write-Host '[9] Build or refresh START-HERE dashboard'
     Write-Host '[10] Open START-HERE dashboard'
+    Write-Host '[R] Change active toolkit repository'
     Write-Host '[0] Back'
     Write-Host ''
 }
@@ -1460,18 +1755,19 @@ function Invoke-ResourceMenu {
                 }
                 '9' {
                     Build-StartHereDashboard `
-                        -RepositoryRoot $RootPath `
+                        -RepositoryRoot $script:RootPath `
                         -BookmarksFile $BookmarksPath | Out-Null
                 }
                 '10' {
-                    $dashboard = Join-Path $RootPath '11-RESOURCES\START-HERE.html'
+                    $dashboard = Join-Path $script:RootPath '11-RESOURCES\START-HERE.html'
                     if (-not (Test-Path $dashboard)) {
                         $dashboard = Build-StartHereDashboard `
-                            -RepositoryRoot $RootPath `
+                            -RepositoryRoot $script:RootPath `
                             -BookmarksFile $BookmarksPath
                     }
                     Start-Process $dashboard
                 }
+                { $_ -match '^(r|R)$' } { Invoke-RepositoryLocationMenu }
                 '0' { return }
                 default {
                     Write-Host 'Invalid resource-menu choice.' -ForegroundColor Red
@@ -1508,6 +1804,395 @@ function Invoke-ProjectHealthCheck {
 }
 
 
+
+function Get-BuildPresets {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        throw "Build presets file not found: $Path"
+    }
+
+    $document = Get-Content -Path $Path -Raw | ConvertFrom-Json
+    if (-not $document.presets) {
+        throw 'Build presets file contains no presets.'
+    }
+
+    return @($document.presets)
+}
+
+function Get-FilteredCatalogById {
+    param(
+        [Parameter(Mandatory)]$Catalog,
+        [Parameter(Mandatory)][string[]]$ItemIds,
+        [string]$Description = 'Filtered catalog'
+    )
+
+    $idMap = @{}
+    foreach ($id in $ItemIds) {
+        $idMap[[string]$id] = $true
+    }
+
+    $selected = @(
+        $Catalog.items | Where-Object {
+            $idMap.ContainsKey([string]$_.id)
+        }
+    )
+
+    $missingIds = @(
+        $ItemIds | Where-Object {
+            $_ -notin @($selected.id)
+        }
+    )
+
+    if ($missingIds.Count -gt 0) {
+        throw "Preset references unknown catalog id(s): $($missingIds -join ', ')"
+    }
+
+    [pscustomobject]@{
+        schemaVersion = $Catalog.schemaVersion
+        notes = $Description
+        items = $selected
+    }
+}
+
+function Get-InstalledCatalogIds {
+    param([Parameter(Mandatory)][string]$RepositoryRoot)
+
+    $inventoryPath = Join-Path $RepositoryRoot '00-ADMIN\inventory\inventory.json'
+    if (-not (Test-Path $inventoryPath)) {
+        return @()
+    }
+
+    $inventory = Get-Content -Path $inventoryPath -Raw | ConvertFrom-Json
+    return @($inventory.Id | Where-Object { $_ } | Sort-Object -Unique)
+}
+
+function Write-SelectionReport {
+    param(
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [Parameter(Mandatory)][string]$SelectionName,
+        [Parameter(Mandatory)]$SelectedCatalog
+    )
+
+    $reportRoot = Join-Path $RepositoryRoot '00-ADMIN\inventory'
+    New-Item -ItemType Directory -Path $reportRoot -Force | Out-Null
+
+    $safeName = ($SelectionName -replace '[^A-Za-z0-9._-]', '-').Trim('-')
+    $reportPath = Join-Path $reportRoot ("selection-{0}-{1}.json" -f `
+        $safeName, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+
+    [pscustomobject]@{
+        SelectionName  = $SelectionName
+        GeneratedUtc   = (Get-Date).ToUniversalTime().ToString('o')
+        BuilderVersion = $ScriptVersion
+        ItemCount      = @($SelectedCatalog.items).Count
+        Items          = @(
+            $SelectedCatalog.items | ForEach-Object {
+                [pscustomobject]@{
+                    Id          = [string]$_.id
+                    Name        = [string]$_.name
+                    SourceType  = [string]$_.sourceType
+                    Destination = [string]$_.destination
+                }
+            }
+        )
+    } | ConvertTo-Json -Depth 7 |
+        Set-Content -Path $reportPath -Encoding UTF8
+
+    return $reportPath
+}
+
+function Invoke-CatalogSubsetOperation {
+    param(
+        [Parameter(Mandatory)][string]$SelectionName,
+        [Parameter(Mandatory)][string[]]$ItemIds,
+        [Parameter(Mandatory)][ValidateSet('Initialize', 'Update', 'Audit')]
+        [string]$Operation
+    )
+
+    New-RepositoryStructure -Path $script:RootPath
+    $catalog = Get-Catalog -Path $CatalogPath
+    $selectedCatalog = Get-FilteredCatalogById `
+        -Catalog $catalog `
+        -ItemIds $ItemIds `
+        -Description $SelectionName
+
+    if (@($selectedCatalog.items).Count -eq 0) {
+        throw "Selection '$SelectionName' contains no catalog items."
+    }
+
+    $selectionReport = Write-SelectionReport `
+        -RepositoryRoot $script:RootPath `
+        -SelectionName $SelectionName `
+        -SelectedCatalog $selectedCatalog
+
+    $logPath = Join-Path $script:RootPath ('00-ADMIN\logs\{0}-{1}-{2}.log' -f `
+        (Get-Date -Format 'yyyyMMdd-HHmmss'),
+        ($SelectionName -replace '[^A-Za-z0-9_-]', '-'),
+        $Operation.ToLowerInvariant())
+
+    Start-Transcript -Path $logPath -Force | Out-Null
+    try {
+        Invoke-CatalogProcessing `
+            -Catalog $selectedCatalog `
+            -RepositoryRoot $script:RootPath `
+            -Operation $Operation
+
+        Build-StartHereDashboard `
+            -RepositoryRoot $script:RootPath `
+            -BookmarksFile $BookmarksPath | Out-Null
+    }
+    finally {
+        Stop-Transcript | Out-Null
+    }
+
+    Write-Host ''
+    Write-Host "Selection report: $selectionReport" -ForegroundColor DarkGray
+    Write-Host "Operation log:    $logPath" -ForegroundColor DarkGray
+}
+
+function Show-BuildPresets {
+    param([Parameter(Mandatory)]$Presets)
+
+    Write-Section 'Guided Build Presets'
+    for ($index = 0; $index -lt $Presets.Count; $index++) {
+        $preset = $Presets[$index]
+        Write-Host ("[{0}] {1}" -f ($index + 1), $preset.name) -ForegroundColor Yellow
+        Write-Host "    $($preset.description)"
+        Write-Host "    Catalog items: $(@($preset.itemIds).Count)" -ForegroundColor DarkGray
+        if (-not $preset.includesInteractiveDownloads) {
+            Write-Host '    No gated vendor interactions.' -ForegroundColor DarkGray
+        }
+        else {
+            Write-Host '    Includes vendor pages requiring user interaction.' -ForegroundColor DarkYellow
+        }
+    }
+}
+
+function Select-BuildPresetInteractive {
+    param([Parameter(Mandatory)]$Presets)
+
+    while ($true) {
+        Show-BuildPresets -Presets $Presets
+        Write-Host ''
+        $selection = Read-Host 'Select a build preset number, or Q to cancel'
+        if ($selection -match '^(q|quit|cancel)$') {
+            return $null
+        }
+
+        [int]$number = 0
+        if ([int]::TryParse($selection, [ref]$number) -and
+            $number -ge 1 -and $number -le $Presets.Count) {
+            return $Presets[$number - 1]
+        }
+
+        Write-Host 'Invalid build preset selection.' -ForegroundColor Red
+    }
+}
+
+function Invoke-GuidedBuild {
+    if (-not (Confirm-ActiveRepositoryForOperation -OperationName 'Guided toolkit build')) {
+        Write-Host 'Guided build cancelled.' -ForegroundColor Yellow
+        return
+    }
+
+    $presets = Get-BuildPresets -Path $BuildPresetsPath
+
+    $selected = if ($PresetId) {
+        $match = $presets | Where-Object id -eq $PresetId | Select-Object -First 1
+        if (-not $match) {
+            throw "Unknown build preset id: $PresetId"
+        }
+        $match
+    }
+    else {
+        Select-BuildPresetInteractive -Presets $presets
+    }
+
+    if (-not $selected) {
+        return
+    }
+
+    Write-Section 'Confirm Guided Build'
+    Write-Host "Preset:          $($selected.name)"
+    Write-Host "Catalog items:   $(@($selected.itemIds).Count)"
+    Write-Host "Local repository:$RootPath"
+    Write-Host "Interactive:     $($selected.includesInteractiveDownloads)"
+    Write-Host ''
+
+    if ($selected.includesInteractiveDownloads) {
+        Write-Host 'This preset may open official vendor pages for forms, EULAs, or account interaction.' `
+            -ForegroundColor Yellow
+    }
+
+    $expected = "BUILD $($selected.id)".ToUpperInvariant()
+    $confirmation = Read-Host "Type '$expected' to continue"
+    if ($confirmation.ToUpperInvariant() -cne $expected) {
+        Write-Host 'Guided build cancelled.' -ForegroundColor Yellow
+        return
+    }
+
+    Invoke-CatalogSubsetOperation `
+        -SelectionName $selected.id `
+        -ItemIds @($selected.itemIds) `
+        -Operation Initialize
+}
+
+function Invoke-UpdateInstalledItems {
+    if (-not (Confirm-ActiveRepositoryForOperation -OperationName 'Update installed items')) {
+        Write-Host 'Installed-item update cancelled.' -ForegroundColor Yellow
+        return
+    }
+
+    $installedIds = Get-InstalledCatalogIds -RepositoryRoot $script:RootPath
+    if ($installedIds.Count -eq 0) {
+        Write-Host 'No installed inventory was found. Run a guided build first.' -ForegroundColor Yellow
+        return
+    }
+
+    Write-Section 'Update Installed Items'
+    Write-Host "Installed catalog items: $($installedIds.Count)"
+    Write-Host 'Only items already recorded in the local inventory will be checked.'
+    Write-Host ''
+
+    $confirmation = Read-Host 'Type UPDATE INSTALLED to continue'
+    if ($confirmation -cne 'UPDATE INSTALLED') {
+        Write-Host 'Installed-item update cancelled.' -ForegroundColor Yellow
+        return
+    }
+
+    Invoke-CatalogSubsetOperation `
+        -SelectionName 'installed-items' `
+        -ItemIds $installedIds `
+        -Operation Update
+}
+
+function Get-LatestProjectLog {
+    param([Parameter(Mandatory)][string]$RepositoryRoot)
+
+    $logRoot = Join-Path $RepositoryRoot '00-ADMIN\logs'
+    if (-not (Test-Path $logRoot)) {
+        return $null
+    }
+
+    return Get-ChildItem -Path $logRoot -File -Filter '*.log' |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+}
+
+function Export-ProjectSupportBundle {
+    param([Parameter(Mandatory)][string]$RepositoryRoot)
+
+    $exportsRoot = Join-Path $RepositoryRoot '00-ADMIN\support-bundles'
+    New-Item -ItemType Directory -Path $exportsRoot -Force | Out-Null
+
+    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $staging = Join-Path $exportsRoot "support-$timestamp"
+    $zipPath = Join-Path $exportsRoot "usb-swiss-army-knife-support-$timestamp.zip"
+
+    New-Item -ItemType Directory -Path $staging -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $staging 'config') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $staging 'logs') -Force | Out-Null
+
+    Copy-Item -Path $CatalogPath -Destination (Join-Path $staging 'config\catalog.json') -Force
+    Copy-Item -Path $ProfilesPath -Destination (Join-Path $staging 'config\profiles.json') -Force
+    Copy-Item -Path $BookmarksPath -Destination (Join-Path $staging 'config\bookmarks.json') -Force
+    Copy-Item -Path $BuildPresetsPath -Destination (Join-Path $staging 'config\build-presets.json') -Force
+
+    $latestLog = Get-LatestProjectLog -RepositoryRoot $RepositoryRoot
+    if ($latestLog) {
+        Copy-Item -Path $latestLog.FullName -Destination (Join-Path $staging 'logs') -Force
+    }
+
+    $inventoryPath = Join-Path $RepositoryRoot '00-ADMIN\inventory\inventory.json'
+    if (Test-Path $inventoryPath) {
+        Copy-Item -Path $inventoryPath -Destination (Join-Path $staging 'inventory.json') -Force
+    }
+
+    $environment = Get-EnvironmentStatus
+    $environment | ConvertTo-Json -Depth 5 |
+        Set-Content -Path (Join-Path $staging 'environment.json') -Encoding UTF8
+
+    @"
+USB SWISS ARMY KNIFE SUPPORT BUNDLE
+===================================
+
+Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+Builder: $ScriptVersion
+
+This bundle intentionally excludes downloaded software, archives, ISOs,
+wordlists, virtual machines, credentials, and third-party project content.
+
+Review logs before sharing to ensure they do not contain sensitive local paths
+or information from your environment.
+"@ | Set-Content -Path (Join-Path $staging 'README.txt') -Encoding UTF8
+
+    Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zipPath -Force
+    Remove-Item -Path $staging -Recurse -Force
+
+    Write-Host "Support bundle created: $zipPath" -ForegroundColor Green
+    return $zipPath
+}
+
+function Show-MaintenanceMenu {
+    Write-Section 'Maintenance and Support'
+    Show-ActiveRepository
+    Write-Host '[1] Update only installed items'
+    Write-Host '[2] Update the complete catalog'
+    Write-Host '[3] Audit installed inventory'
+    Write-Host '[4] Open latest operation log'
+    Write-Host '[5] Export support bundle'
+    Write-Host '[R] Change active toolkit repository'
+    Write-Host '[0] Back'
+    Write-Host ''
+}
+
+function Invoke-MaintenanceMenu {
+    while ($true) {
+        Show-MaintenanceMenu
+        $choice = Read-Host 'Choose a maintenance action'
+
+        try {
+            switch ($choice) {
+                '1' { Invoke-UpdateInstalledItems }
+                '2' { Invoke-RepositoryOperation -Operation Update }
+                '3' {
+                    $installedIds = Get-InstalledCatalogIds -RepositoryRoot $script:RootPath
+                    if ($installedIds.Count -eq 0) {
+                        Write-Host 'No installed inventory was found.' -ForegroundColor Yellow
+                    }
+                    else {
+                        Invoke-CatalogSubsetOperation `
+                            -SelectionName 'installed-audit' `
+                            -ItemIds $installedIds `
+                            -Operation Audit
+                    }
+                }
+                '4' {
+                    $latest = Get-LatestProjectLog -RepositoryRoot $script:RootPath
+                    if (-not $latest) {
+                        Write-Host 'No operation logs were found.' -ForegroundColor Yellow
+                    }
+                    else {
+                        Start-Process notepad.exe -ArgumentList $latest.FullName
+                    }
+                }
+                '5' { Export-ProjectSupportBundle -RepositoryRoot $script:RootPath | Out-Null }
+                { $_ -match '^(r|R)$' } { Invoke-RepositoryLocationMenu }
+                '0' { return }
+                default { Write-Host 'Invalid maintenance-menu choice.' -ForegroundColor Red }
+            }
+        }
+        catch {
+            Write-Host ''
+            Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        }
+
+        Write-Host ''
+        Read-Host 'Press Enter to continue' | Out-Null
+    }
+}
+
 function Get-EnvironmentStatus {
     $powerShellVersion = $PSVersionTable.PSVersion.ToString()
     $edition = if ($PSVersionTable.PSEdition) { $PSVersionTable.PSEdition } else { 'Desktop' }
@@ -1538,7 +2223,7 @@ function Get-EnvironmentStatus {
         RobocopyAvailable = [bool]$robocopy
         GitAvailable = [bool]$git
         RepositoryRoot = $RootPath
-        RepositoryExists = Test-Path $RootPath
+        RepositoryExists = Test-Path $script:RootPath
     }
 }
 
@@ -1652,10 +2337,12 @@ function Invoke-ProjectTestsFromMenu {
 
 function Show-EnvironmentMenu {
     Write-Section 'Environment and Developer Tools'
+    Show-ActiveRepository
     Write-Host '[1] Show environment status'
     Write-Host '[2] Set up NuGet, PSGallery, and Pester'
     Write-Host '[3] Run project metadata validation'
     Write-Host '[4] Run Pester tests'
+    Write-Host '[R] Change active toolkit repository'
     Write-Host '[0] Back'
     Write-Host ''
 }
@@ -1671,6 +2358,7 @@ function Invoke-EnvironmentMenu {
                 '2' { Invoke-DevelopmentSetup }
                 '3' { Invoke-ProjectHealthCheck }
                 '4' { Invoke-ProjectTestsFromMenu }
+                { $_ -match '^(r|R)$' } { Invoke-RepositoryLocationMenu }
                 '0' { return }
                 default { Write-Host 'Invalid environment-menu choice.' -ForegroundColor Red }
             }
@@ -1687,22 +2375,38 @@ function Invoke-EnvironmentMenu {
 
 function Show-MainMenu {
     Write-Section "USB Swiss Army Knife v$ScriptVersion"
-    Write-Host '[1] Initial repository build'
-    Write-Host '[2] Update software repository'
-    Write-Host '[3] Audit for missing or changed items'
-    Write-Host '[4] Provision an individual USB'
-    Write-Host '[5] Show USB module profiles'
-    Write-Host '[6] Resources and references'
-    Write-Host '[7] Environment and developer tools'
-    Write-Host '[8] Project health check'
-    Write-Host '[9] Open the local repository folder'
-    Write-Host '[10] Open START-HERE dashboard'
+    Show-ActiveRepository
+    Write-Host ''
+    Write-Host '[1] Guided toolkit build'
+    Write-Host '[2] Maintenance and updates'
+    Write-Host '[3] Provision an individual USB'
+    Write-Host '[4] Show USB module profiles'
+    Write-Host '[5] Resources and references'
+    Write-Host '[6] Environment and developer tools'
+    Write-Host '[7] Project health check'
+    Write-Host '[8] Open the local repository folder'
+    Write-Host '[9] Open START-HERE dashboard'
+    Write-Host '[R] Change active toolkit repository'
     Write-Host '[0] Exit'
     Write-Host ''
 }
 
 function Invoke-InteractiveMenu {
-    New-RepositoryStructure -Path $RootPath
+    New-RepositoryStructure -Path $script:RootPath
+
+    Write-Section 'Choose Toolkit Repository'
+    Write-Host 'All builds, updates, resources, inventories, logs, and dashboards'
+    Write-Host 'will use the active repository shown in the menus.'
+    Show-ActiveRepository
+    Write-Host ''
+    Write-Host '[Enter] Keep this location'
+    Write-Host '[R] Choose a USB, external drive, or custom folder'
+    Write-Host ''
+
+    $initialChoice = Read-Host 'Choose an action'
+    if ($initialChoice -match '^(r|repository|location)$') {
+        Invoke-RepositoryLocationMenu
+    }
 
     while ($true) {
         Show-MainMenu
@@ -1710,26 +2414,28 @@ function Invoke-InteractiveMenu {
 
         try {
             switch ($choice) {
-                '1' { Invoke-RepositoryOperation -Operation Initialize }
-                '2' { Invoke-RepositoryOperation -Operation Update }
-                '3' { Invoke-RepositoryOperation -Operation Audit }
-                '4' { Invoke-ProvisionSelection }
-                '5' {
+                '1' { Invoke-GuidedBuild }
+                '2' { Invoke-MaintenanceMenu }
+                '3' { Invoke-ProvisionSelection }
+                '4' {
                     $profiles = Get-Profiles -Path $ProfilesPath
-                    Show-Profiles -Profiles $profiles -RepositoryRoot $RootPath
+                    Show-Profiles -Profiles $profiles -RepositoryRoot $script:RootPath
                 }
-                '6' { Invoke-ResourceMenu }
-                '7' { Invoke-EnvironmentMenu }
-                '8' { Invoke-ProjectHealthCheck }
-                '9' { Start-Process explorer.exe -ArgumentList $RootPath }
-                '10' {
-                    $dashboard = Join-Path $RootPath '11-RESOURCES\START-HERE.html'
+                '5' { Invoke-ResourceMenu }
+                '6' { Invoke-EnvironmentMenu }
+                '7' { Invoke-ProjectHealthCheck }
+                '8' { Start-Process explorer.exe -ArgumentList $RootPath }
+                '9' {
+                    $dashboard = Join-Path $script:RootPath '11-RESOURCES\START-HERE.html'
                     if (-not (Test-Path $dashboard)) {
                         $dashboard = Build-StartHereDashboard `
-                            -RepositoryRoot $RootPath `
+                            -RepositoryRoot $script:RootPath `
                             -BookmarksFile $BookmarksPath
                     }
                     Start-Process $dashboard
+                }
+                { $_ -match '^(r|R)$' } {
+                    Invoke-RepositoryLocationMenu
                 }
                 '0' {
                     Write-Host 'Goodbye.' -ForegroundColor Cyan
@@ -1750,6 +2456,8 @@ function Invoke-InteractiveMenu {
     }
 }
 
+$script:RootPath = [IO.Path]::GetFullPath($RootPath)
+
 Write-Section "USB Swiss Army Knife Builder v$ScriptVersion - $Mode"
 
 switch ($Mode) {
@@ -1758,7 +2466,7 @@ switch ($Mode) {
     'Update' { Invoke-RepositoryOperation -Operation Update }
     'Audit' { Invoke-RepositoryOperation -Operation Audit }
     'Provision' {
-        New-RepositoryStructure -Path $RootPath
+        New-RepositoryStructure -Path $script:RootPath
         Invoke-ProvisionSelection
     }
     default { throw "Unsupported mode: $Mode" }
