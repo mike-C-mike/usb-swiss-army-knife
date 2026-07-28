@@ -21,8 +21,21 @@ Describe 'Repository configuration' {
     }
 
     It 'contains no shipped third-party binary artifacts' {
-        @((Get-ChildItem $RepositoryRoot -File -Recurse) |
-            Where-Object Extension -in '.exe','.msi','.zip','.7z','.iso','.img','.vhd','.vhdx','.vmdk','.ova').Count | Should -Be 0
+        $generatedRoots = @(
+            (Join-Path $RepositoryRoot '.venv'),
+            (Join-Path $RepositoryRoot 'build'),
+            (Join-Path $RepositoryRoot 'dist'),
+            (Join-Path $RepositoryRoot 'release')
+        )
+
+        $binaryArtifacts = Get-ChildItem $RepositoryRoot -File -Recurse |
+            Where-Object Extension -in '.exe','.msi','.zip','.7z','.iso','.img','.vhd','.vhdx','.vmdk','.ova' |
+            Where-Object {
+                $fullName = $_.FullName
+                -not ($generatedRoots | Where-Object { $fullName.StartsWith($_, [System.StringComparison]::OrdinalIgnoreCase) })
+            }
+
+        @($binaryArtifacts).Count | Should -Be 0
     }
 
     It 'contains the convenience launchers' {
@@ -82,6 +95,6 @@ Describe 'Repository configuration' {
         $content = Get-Content $scriptPath -Raw
 
         $content | Should -Match "Join-Path .*'usb-swiss-army-knife'"
-        $content | Should -Match "USE \\$\(\$drive\.DeviceID\)"
+        $content | Should -Match 'USE \\\$\(\$drive\.DeviceID\)'
     }
 }

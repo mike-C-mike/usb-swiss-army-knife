@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.2.3"
+    [string]$Version = "0.2.8"
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,6 +38,7 @@ $docs = @(
     "SIMPLE_WORKFLOW.md",
     "RELEASE_NOTES_v0.2.3.md",
     "RELEASE_NOTES_v0.2.7.md",
+    "RELEASE_NOTES_v0.2.8.md",
     "DOWNLOAD_WORKFLOW.md",
     "TRANSPARENCY_WORKFLOW.md",
     "VETTED_SOURCES_v0.2.3.md",

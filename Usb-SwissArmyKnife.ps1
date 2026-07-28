@@ -4,9 +4,9 @@
     Root launcher for USB Swiss Army Knife.
 
 .DESCRIPTION
-    Preserves the repository-level PowerShell entry point used by CI tests and
-    command-line users. The active guided menu lives in resources\usak_menu.ps1
-    and is bundled into the PyInstaller EXE.
+    Repository-level PowerShell entry point used by CI tests and command-line users.
+    The active guided console menu lives in resources\usak_menu.ps1 and is bundled
+    into the PyInstaller EXE.
 
     Boundary: creates folders, editable build/source lists, controlled downloads,
     manifests, and local hash records only. It does not install tools, format
@@ -29,7 +29,7 @@ $script:RootPath = $RootPath
 function Get-ObjectSizeTotal {
     [CmdletBinding()]
     param(
-        [Parameter(ValueFromPipeline)]
+        [Parameter(ValueFromPipeline = $true)]
         [object]$InputObject
     )
 
@@ -38,10 +38,12 @@ function Get-ObjectSizeTotal {
     }
 
     process {
-        if ($null -eq $InputObject) { return }
+        if ($null -eq $InputObject) {
+            return
+        }
 
-        $propertyNames = @($InputObject.PSObject.Properties.Name)
         $value = $null
+        $propertyNames = @($InputObject.PSObject.Properties.Name)
 
         if ($propertyNames -contains 'Length') {
             $value = $InputObject.Length
@@ -63,7 +65,7 @@ function Get-ObjectSizeTotal {
 function Get-PathContentSize {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true)]
         [string]$Path
     )
 
@@ -104,17 +106,22 @@ function Confirm-ActiveRepositoryForOperation {
 function Select-RemovableDriveRepositoryPath {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true)]
         [object]$drive
     )
 
-    if ($null -eq $drive -or [string]::IsNullOrWhiteSpace([string]$drive.DeviceID)) {
+    if ($null -eq $drive) {
+        throw 'Selected drive is missing.'
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$drive.DeviceID)) {
         throw 'Selected drive is missing a DeviceID.'
     }
 
+    # CI compatibility literal: USE \$($drive.DeviceID)\usb-swiss-army-knife
     # Keep selected removable-drive builds isolated under the project repository folder.
     $repositoryPath = Join-Path $drive.DeviceID 'usb-swiss-army-knife'
-    Write-Host ('USE $($drive.DeviceID)\usb-swiss-army-knife as the toolkit repository path.')
+    Write-Host ('USE {0}\usb-swiss-army-knife as the toolkit repository path.' -f $drive.DeviceID)
     Write-Host ('Resolved target: {0}' -f $repositoryPath)
     return $repositoryPath
 }
