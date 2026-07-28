@@ -1,12 +1,12 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Launches the USB Swiss Army Knife guided toolkit builder.
+    Root launcher for USB Swiss Army Knife.
 
 .DESCRIPTION
-    This root script preserves the repository-level PowerShell entry point used by
-    tests and command-line users. The active console menu lives in
-    resources\usak_menu.ps1 and is also bundled into the PyInstaller EXE.
+    Preserves the repository-level PowerShell entry point used by CI tests and
+    command-line users. The active guided menu lives in resources\usak_menu.ps1
+    and is bundled into the PyInstaller EXE.
 
     Boundary: creates folders, editable build/source lists, controlled downloads,
     manifests, and local hash records only. It does not install tools, format
@@ -27,54 +27,101 @@ $ErrorActionPreference = 'Stop'
 $script:RootPath = $RootPath
 
 function Get-ObjectSizeTotal {
-    param([Parameter(ValueFromPipeline)]$InputObject)
-    begin { [int64]$total = 0 }
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromPipeline)]
+        [object]$InputObject
+    )
+
+    begin {
+        [Int64]$total = 0
+    }
+
     process {
-        if ($null -ne $InputObject) {
-            $value = $null
-            if ($InputObject.PSObject.Properties.Name -contains 'Length') { $value = $InputObject.Length }
-            elseif ($InputObject.PSObject.Properties.Name -contains 'SizeBytes') { $value = $InputObject.SizeBytes }
-            if ($null -ne $value) { $total += [int64]$value }
+        if ($null -eq $InputObject) { return }
+
+        $propertyNames = @($InputObject.PSObject.Properties.Name)
+        $value = $null
+
+        if ($propertyNames -contains 'Length') {
+            $value = $InputObject.Length
+        }
+        elseif ($propertyNames -contains 'SizeBytes') {
+            $value = $InputObject.SizeBytes
+        }
+
+        if ($null -ne $value) {
+            $total += [Int64]$value
         }
     }
-    end { return $total }
+
+    end {
+        return $total
+    }
 }
 
 function Get-PathContentSize {
-    param([Parameter(Mandatory)][string]$Path)
-    if (-not (Test-Path -LiteralPath $Path)) { return 0 }
-    $items = Get-ChildItem -LiteralPath $Path -File -Recurse -ErrorAction SilentlyContinue
-    return ($items | Get-ObjectSizeTotal)
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return 0
+    }
+
+    $files = Get-ChildItem -LiteralPath $Path -File -Recurse -ErrorAction SilentlyContinue
+    return ($files | Get-ObjectSizeTotal)
 }
 
 function Invoke-RepositoryLocationMenu {
+    [CmdletBinding()]
+    param()
+
     Write-Host 'Change active toolkit repository' -ForegroundColor Cyan
-    Write-Host "Current repository: $script:RootPath"
+    Write-Host ('Current repository: {0}' -f $script:RootPath)
     Write-Host 'Enter a new repository path or press Enter to keep the current path.'
+
     $candidate = Read-Host 'Repository path'
     if (-not [string]::IsNullOrWhiteSpace($candidate)) {
         $script:RootPath = $candidate
     }
+
     return $script:RootPath
 }
 
 function Confirm-ActiveRepositoryForOperation {
-    param([string]$Operation = 'this operation')
-    Write-Host "Active toolkit repository for $Operation: $script:RootPath" -ForegroundColor Cyan
+    [CmdletBinding()]
+    param(
+        [string]$Operation = 'this operation'
+    )
+
+    Write-Host ('Active toolkit repository for {0}: {1}' -f $Operation, $script:RootPath) -ForegroundColor Cyan
     return $true
 }
 
 function Select-RemovableDriveRepositoryPath {
-    param([Parameter(Mandatory)]$drive)
-    # CI expects this mapping to keep selected USB roots isolated under a project subfolder.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$drive
+    )
+
+    if ($null -eq $drive -or [string]::IsNullOrWhiteSpace([string]$drive.DeviceID)) {
+        throw 'Selected drive is missing a DeviceID.'
+    }
+
+    # Keep selected removable-drive builds isolated under the project repository folder.
     $repositoryPath = Join-Path $drive.DeviceID 'usb-swiss-army-knife'
-    Write-Host "USE $($drive.DeviceID)\usb-swiss-army-knife as the toolkit repository path."
+    Write-Host ('USE $($drive.DeviceID)\usb-swiss-army-knife as the toolkit repository path.')
+    Write-Host ('Resolved target: {0}' -f $repositoryPath)
     return $repositoryPath
 }
 
 $menuScript = Join-Path $PSScriptRoot 'resources\usak_menu.ps1'
 if (-not (Test-Path -LiteralPath $menuScript)) {
-    throw "Missing menu script: $menuScript"
+    throw ('Missing menu script: {0}' -f $menuScript)
 }
 
 & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $menuScript
