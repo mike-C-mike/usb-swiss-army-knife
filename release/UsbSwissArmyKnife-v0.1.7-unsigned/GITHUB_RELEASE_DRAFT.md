@@ -1,4 +1,4 @@
-# USB Swiss Army Knife v0.2.0 Unsigned Pre-Release
+# USB Swiss Army Knife v0.1.7 Unsigned Pre-Release
 
 ## Release type
 
@@ -20,5 +20,5 @@ This tool does not download, install, bundle, format, erase, or redistribute thi
 
 ## Upload assets
 
-- `UsbSwissArmyKnife-v0.2.0-unsigned.zip`
-- `UsbSwissArmyKnife-v0.2.0-unsigned.zip.sha256.txt`
+- `UsbSwissArmyKnife-v0.1.7-unsigned.zip`
+- `UsbSwissArmyKnife-v0.1.7-unsigned.zip.sha256.txt`

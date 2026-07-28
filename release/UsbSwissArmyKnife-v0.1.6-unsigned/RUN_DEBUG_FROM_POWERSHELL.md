@@ -3,7 +3,7 @@
 If the EXE closes too quickly or appears to fail, run it from PowerShell instead of double-clicking it.
 
 ```powershell
-.\release\UsbSwissArmyKnife-v0.1.7-unsigned\UsbSwissArmyKnife.exe
+.\release\UsbSwissArmyKnife-v0.1.6-unsigned\UsbSwissArmyKnife.exe
 ```
 
 Or from the build output:
@@ -15,7 +15,7 @@ Or from the build output:
 The launcher now writes a log file here:
 
 ```text
-%USERPROFILE%\UsbSwissArmyKnife\logs\launcher.log
+%LOCALAPPDATA%\ForensicsByte\UsbSwissArmyKnife\logs\launcher.log
 ```
 
 The console also pauses before closing so the exit code and log path remain visible.
@@ -29,5 +29,5 @@ If you extracted the build kit directly into your repository root, do **not** `c
 ```powershell
 Unblock-File .\build_release.ps1
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\build_release.ps1 -Version 0.1.7
+.\build_release.ps1 -Version 0.1.6
 ```

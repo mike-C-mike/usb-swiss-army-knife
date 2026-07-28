@@ -11,9 +11,4 @@
 9. Select the target drive/path for each recommended drive role.
 10. Confirm before writing folders and source records.
 
-The builder uses `FolderStructure.csv` and `ToolList_SOURCE_OF_TRUTH.csv` as the current editable source of truth.
-
-
-## Local install workflow
-
-Choose Local Install when you want the toolkit structure under C:\UsbSwissArmyKnife-style local storage or another selected drive/folder. The builder creates folders, templates, source cards, and planning files only.
+The builder uses `FolderStructure.csv` and `ToolList.csv` as the current editable source of truth.
