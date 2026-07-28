@@ -7,9 +7,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Do not rely on $PSScriptRoot inside parameter defaults. In some hosted or
-# wrapper-invoked contexts it can evaluate as an empty string before the script
-# body runs. Resolve paths inside the script body instead.
+function Resolve-SafeFullPath {
+    param([Parameter(Mandatory)][string]$PathValue)
+    $clean = ($PathValue -replace '^["'']+', '' -replace '["'']+$', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($clean)) {
+        throw 'Path value resolved to blank.'
+    }
+    return [System.IO.Path]::GetFullPath($clean)
+}
+
 $scriptFile = $PSCommandPath
 if ([string]::IsNullOrWhiteSpace($scriptFile)) {
     $scriptFile = $MyInvocation.MyCommand.Path
@@ -22,8 +28,12 @@ $toolsDir = Split-Path -Parent $scriptFile
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = Split-Path -Parent $toolsDir
 }
+$RepositoryRoot = Resolve-SafeFullPath $RepositoryRoot
+
 if ([string]::IsNullOrWhiteSpace($TestPath)) {
     $TestPath = Join-Path $RepositoryRoot 'tests'
+} else {
+    $TestPath = Resolve-SafeFullPath $TestPath
 }
 
 if (-not (Test-Path -LiteralPath $TestPath)) {
@@ -46,7 +56,7 @@ if (-not $available) {
 Import-Module Pester -RequiredVersion $available.Version -Force
 
 $config = New-PesterConfiguration
-$config.Run.Path = $TestPath
+$config.Run.Path = @($TestPath)
 $config.Run.PassThru = $true
 $config.Output.Verbosity = 'Detailed'
 

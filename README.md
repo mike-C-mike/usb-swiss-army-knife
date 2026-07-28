@@ -126,6 +126,6 @@ Additional outputs are informational: `FolderStructure.csv`, `DownloadTransparen
 The Download Manager shows the official review page and exact direct download URL before download. Downloads run only for rows with `Include=Yes`, `DownloadEnabled=Yes`, and a populated HTTPS `DirectDownloadURL`. The app downloads to a user-profile staging folder, hashes the completed file with SHA-256, and writes the result to `DownloadManifest_SUCCESS_FAILURE_HASHES.csv`. It does not install or execute downloaded files.
 
 
-## v0.2.5 CI compatibility
+## v0.2.6 CI compatibility
 
 This build restores the root convenience launchers and `Usb-SwissArmyKnife.ps1` entry point used by the repository validation workflow. The root script delegates to `resources/usak_menu.ps1`, which remains the active guided menu used by the EXE.

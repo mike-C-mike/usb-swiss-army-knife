@@ -1,4 +1,4 @@
-# USB Swiss Army Knife v0.2.5 Unsigned Pre-Release
+# USB Swiss Army Knife v0.2.6 Unsigned Pre-Release
 
 This patch fixes CI/test-runner compatibility after the v0.2.x download transparency work.
 

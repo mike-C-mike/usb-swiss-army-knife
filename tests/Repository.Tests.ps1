@@ -1,5 +1,29 @@
-﻿BeforeAll{$r=Split-Path -Parent $PSScriptRoot;$c=Get-Content "$r\config\catalog.json" -Raw|ConvertFrom-Json;$p=Get-Content "$r\config\profiles.json" -Raw|ConvertFrom-Json}
-Describe 'Repository configuration'{It 'has unique catalog ids'{($c.items.id|sort -Unique).Count|Should -Be $c.items.id.Count};It 'has unique profile ids'{($p.profiles.id|sort -Unique).Count|Should -Be $p.profiles.id.Count};It 'contains no shipped third-party binary artifacts'{@((Get-ChildItem $r -File -Recurse)|? Extension -in '.exe','.msi','.zip','.7z','.iso','.img','.vhd','.vhdx','.vmdk','.ova').Count|Should -Be 0}
+BeforeAll {
+    $RepositoryRoot = Split-Path -Parent $PSScriptRoot
+    $CatalogPath = Join-Path $RepositoryRoot 'config\catalog.json'
+    $ProfilesPath = Join-Path $RepositoryRoot 'config\profiles.json'
+    $BuildPresetsPath = Join-Path $RepositoryRoot 'config\build-presets.json'
+
+    $Catalog = if (Test-Path -LiteralPath $CatalogPath) { Get-Content $CatalogPath -Raw | ConvertFrom-Json } else { [pscustomobject]@{ items = @() } }
+    $Profiles = if (Test-Path -LiteralPath $ProfilesPath) { Get-Content $ProfilesPath -Raw | ConvertFrom-Json } else { [pscustomobject]@{ profiles = @() } }
+    $BuildPresets = if (Test-Path -LiteralPath $BuildPresetsPath) { Get-Content $BuildPresetsPath -Raw | ConvertFrom-Json } else { [pscustomobject]@{ presets = @() } }
+}
+
+Describe 'Repository configuration' {
+    It 'has unique catalog ids' {
+        $ids = @($Catalog.items.id)
+        @($ids | Sort-Object -Unique).Count | Should -Be $ids.Count
+    }
+
+    It 'has unique profile ids' {
+        $ids = @($Profiles.profiles.id)
+        @($ids | Sort-Object -Unique).Count | Should -Be $ids.Count
+    }
+
+    It 'contains no shipped third-party binary artifacts' {
+        @((Get-ChildItem $RepositoryRoot -File -Recurse) |
+            Where-Object Extension -in '.exe','.msi','.zip','.7z','.iso','.img','.vhd','.vhdx','.vmdk','.ova').Count | Should -Be 0
+    }
 
     It 'contains the convenience launchers' {
         Test-Path (Join-Path $RepositoryRoot 'Start-UsbSwissArmyKnife.cmd') | Should -BeTrue
@@ -19,7 +43,6 @@ Describe 'Repository configuration'{It 'has unique catalog ids'{($c.items.id|sor
         @($parseErrors).Count | Should -Be 0
     }
 
-
     It 'uses unique build preset identifiers' {
         $ids = @($BuildPresets.presets.id)
         @($ids | Sort-Object -Unique).Count | Should -Be $ids.Count
@@ -27,14 +50,12 @@ Describe 'Repository configuration'{It 'has unique catalog ids'{($c.items.id|sor
 
     It 'uses only known catalog ids in build presets' {
         $catalogIds = @($Catalog.items.id)
-        foreach ($preset in $BuildPresets.presets) {
+        foreach ($preset in @($BuildPresets.presets)) {
             foreach ($itemId in @($preset.itemIds)) {
                 $itemId | Should -BeIn $catalogIds
             }
         }
     }
-
-
 
     It 'does not use strict-mode-unsafe Measure-Object Sum access for content sizes' {
         $scriptPath = Join-Path $RepositoryRoot 'Usb-SwissArmyKnife.ps1'
@@ -45,7 +66,6 @@ Describe 'Repository configuration'{It 'has unique catalog ids'{($c.items.id|sor
         $content | Should -Match 'function Get-PathContentSize'
         $content | Should -Match 'function Get-ObjectSizeTotal'
     }
-
 
     It 'supports changing the active repository during interactive use' {
         $scriptPath = Join-Path $RepositoryRoot 'Usb-SwissArmyKnife.ps1'
@@ -62,7 +82,6 @@ Describe 'Repository configuration'{It 'has unique catalog ids'{($c.items.id|sor
         $content = Get-Content $scriptPath -Raw
 
         $content | Should -Match "Join-Path .*'usb-swiss-army-knife'"
-        $content | Should -Match "USE \\$\\(\\$drive\\.DeviceID\\)"
+        $content | Should -Match "USE \\$\(\$drive\.DeviceID\)"
     }
-
 }
