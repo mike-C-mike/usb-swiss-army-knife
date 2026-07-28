@@ -4,7 +4,7 @@
 - Console application only; no GUI yet.
 - Does not download, install, bundle, or update third-party tools.
 - Does not format, erase, partition, or modify boot sectors.
-- CSV files are the authoritative editable lists for v0.1.4.
+- CSV files are the authoritative editable lists for v0.1.6.
 - Optional XLSX output is generated for easier review/editing, but the builder reads the CSV files when writing the USB.
 - Official source URLs are starter references and should be reviewed before field use.
 - Users are responsible for third-party license, policy, and source verification.

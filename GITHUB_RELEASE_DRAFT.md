@@ -1,18 +1,12 @@
-# USB Swiss Army Knife v0.1.4 Unsigned Pre-Release
+# USB Swiss Army Knife v0.1.6 Unsigned Pre-Release
 
-This release adds the Everything build profile and editable CSV/XLSX planning output.
+## Assets
 
-## Highlights
+- `UsbSwissArmyKnife-v0.1.6-unsigned.zip`
+- `UsbSwissArmyKnife-v0.1.6-unsigned.zip.sha256.txt`
 
-- Guided build path with resume support
-- IT Support, DFIR, OSINT, and Everything purposes
-- Minimal, Solid, and Overkill package levels
-- Editable FolderStructure.csv and ToolList.csv
-- Optional XLSX workbook for review
-- Tool source records with official source URLs
-- No third-party binaries, installers, ISOs, tools, or downloaded content included
+## Notes
 
-## Upload assets
+This release fixes a PowerShell parser error in the XLSX workbook generator caused by invalid quote escaping. It preserves the guided build workflow, editable CSV/XLSX planning files, Everything build purpose, and console debug hold.
 
-- `UsbSwissArmyKnife-v0.1.4-unsigned.zip`
-- `UsbSwissArmyKnife-v0.1.4-unsigned.zip.sha256.txt`
+This is an unsigned pre-release. Windows SmartScreen warnings are expected.

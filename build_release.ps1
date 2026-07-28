@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.4"
+    [string]$Version = "0.1.6"
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,9 +36,10 @@ $docs = @(
     "UNSIGNED_WINDOWS_NOTICE.md",
     "KNOWN_LIMITATIONS.md",
     "SIMPLE_WORKFLOW.md",
-    "RELEASE_NOTES_v0.1.4.md",
+    "RELEASE_NOTES_v0.1.6.md",
     "GITHUB_RELEASE_DRAFT.md",
-    "RELEASE_CHECKLIST.md"
+    "RELEASE_CHECKLIST.md",
+    "RUN_DEBUG_FROM_POWERSHELL.md"
 )
 foreach ($doc in $docs) {
     if (Test-Path $doc) { Copy-Item $doc -Destination $ReleaseDir }

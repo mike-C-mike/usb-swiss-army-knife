@@ -35,7 +35,7 @@ UsbToolkitBuildPlan.xlsx  optional
 
 The CSV files are the authoritative current lists used by the builder. Users can remove rows, change `Include` to `No`, edit target folders, or replace source URLs before writing a USB build.
 
-The XLSX workbook is provided for easier review/editing in Excel when selected. The current v0.1.4 builder reads the CSV files when writing the USB.
+The XLSX workbook is provided for easier review/editing in Excel when selected. The current v0.1.6 builder reads the CSV files when writing the USB.
 
 ## Boundary
 
@@ -48,7 +48,7 @@ The tool does not download, install, format, erase, or modify boot sectors. It c
 ```powershell
 Unblock-File .\build_release.ps1
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\build_release.ps1 -Version 0.1.4
+.\build_release.ps1 -Version 0.1.6
 ```
 
 Release output is created under `release\`.

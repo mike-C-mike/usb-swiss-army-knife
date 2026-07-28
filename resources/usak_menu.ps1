@@ -1,5 +1,5 @@
 <#
-USB Swiss Army Knife console menu v0.1.4
+USB Swiss Army Knife console menu v0.1.6
 
 Bundled PowerShell menu launched by the USB Swiss Army Knife EXE.
 
@@ -12,7 +12,7 @@ Boundary:
 #>
 
 $ErrorActionPreference = "Stop"
-$Script:AppVersion = "0.1.4"
+$Script:AppVersion = "0.1.6"
 $Script:SessionDir = Join-Path $env:LOCALAPPDATA "ForensicsByte\UsbSwissArmyKnife"
 $Script:SessionPath = Join-Path $Script:SessionDir "guided_session.json"
 $Script:PlanningDir = Join-Path $Script:SessionDir "planning"
@@ -408,22 +408,22 @@ function Convert-TableToWorksheetXml {
     [void]$sb.Append('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
     [void]$sb.Append('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>')
     $r = 1
-    [void]$sb.Append("<row r=\"$r\">")
+    [void]$sb.Append(('<row r="{0}">' -f $r))
     $c = 1
     foreach ($h in $Headers) {
         $cellRef = (Get-ExcelColumnName -Index $c) + $r
-        [void]$sb.Append("<c r=\"$cellRef\" t=\"inlineStr\"><is><t>$(Xml-Escape $h)</t></is></c>")
+        [void]$sb.Append(('<c r="{0}" t="inlineStr"><is><t>{1}</t></is></c>' -f $cellRef, (Xml-Escape $h)))
         $c++
     }
     [void]$sb.Append('</row>')
     foreach ($row in $Rows) {
         $r++
-        [void]$sb.Append("<row r=\"$r\">")
+        [void]$sb.Append(('<row r="{0}">' -f $r))
         $c = 1
         foreach ($h in $Headers) {
             $value = $row.$h
             $cellRef = (Get-ExcelColumnName -Index $c) + $r
-            [void]$sb.Append("<c r=\"$cellRef\" t=\"inlineStr\"><is><t>$(Xml-Escape $value)</t></is></c>")
+            [void]$sb.Append(('<c r="{0}" t="inlineStr"><is><t>{1}</t></is></c>' -f $cellRef, (Xml-Escape $value)))
             $c++
         }
         [void]$sb.Append('</row>')
