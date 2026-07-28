@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 APP_NAME = "USB Swiss Army Knife"
-APP_VERSION = "0.2.3"
+APP_VERSION = "0.2.4"
 
 
 def local_app_data_dir():

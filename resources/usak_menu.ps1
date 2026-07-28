@@ -14,7 +14,7 @@ Boundary:
 #>
 
 $ErrorActionPreference = "Stop"
-$Script:AppVersion = "0.2.3"
+$Script:AppVersion = "0.2.4"
 $Script:SessionDir = Join-Path $env:USERPROFILE "UsbSwissArmyKnife"
 $Script:SessionPath = Join-Path $Script:SessionDir "guided_session.json"
 $Script:PlanningDir = Join-Path $Script:SessionDir "planning"

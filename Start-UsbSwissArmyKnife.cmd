@@ -2,10 +2,8 @@
 setlocal
 cd /d "%~dp0"
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0Usb-SwissArmyKnife.ps1"
-set "EXITCODE=%ERRORLEVEL%"
+set EXITCODE=%ERRORLEVEL%
 echo.
-if not "%EXITCODE%"=="0" (
-  echo USB Swiss Army Knife exited with code %EXITCODE%.
-  pause
-)
+echo USB Swiss Army Knife exited with code %EXITCODE%.
+pause
 exit /b %EXITCODE%
