@@ -1,5 +1,5 @@
 <#
-USB Swiss Army Knife console menu v0.2.0
+USB Swiss Army Knife console menu v0.2.3
 
 Bundled PowerShell menu launched by the USB Swiss Army Knife EXE.
 
@@ -14,7 +14,7 @@ Boundary:
 #>
 
 $ErrorActionPreference = "Stop"
-$Script:AppVersion = "0.2.0"
+$Script:AppVersion = "0.2.3"
 $Script:SessionDir = Join-Path $env:USERPROFILE "UsbSwissArmyKnife"
 $Script:SessionPath = Join-Path $Script:SessionDir "guided_session.json"
 $Script:PlanningDir = Join-Path $Script:SessionDir "planning"
@@ -232,8 +232,8 @@ function Get-SourceHost {
 
 function Get-SourceVettingStatus {
     param([string]$ToolName, [string]$OfficialSourceURL)
-    $host = Get-SourceHost -Url $OfficialSourceURL
-    if ($host -in @(
+    $sourceHost = Get-SourceHost -Url $OfficialSourceURL
+    if ($sourceHost -in @(
         "learn.microsoft.com", "download.sysinternals.com", "www.7-zip.org", "7-zip.org",
         "www.wireshark.org", "ericzimmerman.github.io", "github.com", "www.nirsoft.net",
         "www.voidtools.com", "notepad-plus-plus.org", "winscp.net", "rufus.ie",
@@ -246,23 +246,23 @@ function Get-SourceVettingStatus {
 
 function Get-SourceVettingNotes {
     param([string]$ToolName, [string]$OfficialSourceURL)
-    $host = Get-SourceHost -Url $OfficialSourceURL
+    $sourceHost = Get-SourceHost -Url $OfficialSourceURL
     if ($ToolName -eq "Microsoft Sysinternals Suite") {
         return "Official Microsoft Learn page and Microsoft download CDN are used for source reference. Direct download can be enabled by the user."
     }
-    if ($host -eq "www.7-zip.org" -or $host -eq "7-zip.org") {
+    if ($sourceHost -eq "www.7-zip.org" -or $sourceHost -eq "7-zip.org") {
         return "Official 7-Zip project site. Versioned direct URLs change over time; source page is recorded for user review."
     }
-    if ($host -eq "www.wireshark.org") {
+    if ($sourceHost -eq "www.wireshark.org") {
         return "Official Wireshark download page. Installer versions change; source page is recorded for user review."
     }
-    if ($host -eq "ericzimmerman.github.io") {
+    if ($sourceHost -eq "ericzimmerman.github.io") {
         return "Official Eric Zimmerman tools site. Download method should follow publisher guidance."
     }
-    if ($host -eq "github.com") {
+    if ($sourceHost -eq "github.com") {
         return "Official upstream GitHub project page recorded. Release asset selection still needs per-tool review."
     }
-    if ([string]::IsNullOrWhiteSpace($host)) { return "No official source URL recorded." }
+    if ([string]::IsNullOrWhiteSpace($sourceHost)) { return "No official source URL recorded." }
     return "Source page recorded. Confirm publisher control, license, and direct download behavior before enabling automatic download."
 }
 
@@ -1265,6 +1265,882 @@ function Start-Menu {
                 3 { return }
             }
         }
+    }
+}
+
+
+
+# ---------------------------------------------------------------------------
+# v0.2.3 download hardening overrides
+# These function definitions intentionally appear near the end of the script so
+# they replace earlier v0.2.1 implementations without changing the broader menu.
+# ---------------------------------------------------------------------------
+
+function Test-HttpsUrl {
+    param([string]$Url)
+    try {
+        if ([string]::IsNullOrWhiteSpace($Url)) { return $false }
+        $uri = [System.Uri]$Url
+        return ($uri.Scheme -eq "https")
+    }
+    catch { return $false }
+}
+
+function New-ToolRow {
+    param(
+        [string]$Purpose, [string]$RequiredLevel, [string]$Category, [string]$ToolName,
+        [string]$TargetFolder, [string]$OfficialSourceURL, [string]$LicenseNotes,
+        [string]$SourceNotes, [string]$Notes
+    )
+    $directUrl = Get-DefaultDirectDownloadUrl -ToolName $ToolName
+    $enabled = Get-DefaultDownloadEnabled -ToolName $ToolName
+    $hostName = Get-SourceHost -Url $OfficialSourceURL
+    $directHostName = Get-SourceHost -Url $directUrl
+    $readiness = "Manual source review"
+    if ($enabled -eq "Yes" -and -not [string]::IsNullOrWhiteSpace($directUrl)) { $readiness = "Direct download enabled" }
+    elseif (-not [string]::IsNullOrWhiteSpace($directUrl)) { $readiness = "Direct URL recorded but disabled" }
+
+    [pscustomobject]@{
+        Include = "Yes"
+        Purpose = $Purpose
+        PackageLevel = $RequiredLevel
+        Category = $Category
+        ToolName = $ToolName
+        Version = ""
+        TargetFolder = $TargetFolder
+        OfficialSourceURL = $OfficialSourceURL
+        OfficialSourceHost = $hostName
+        SourceNotes = $SourceNotes
+        LicenseNotes = $LicenseNotes
+        SourceVettingStatus = (Get-SourceVettingStatus -ToolName $ToolName -OfficialSourceURL $OfficialSourceURL)
+        SourceVettingNotes = (Get-SourceVettingNotes -ToolName $ToolName -OfficialSourceURL $OfficialSourceURL)
+        SourceVettedOn = "2026-07-28"
+        DownloadStatus = "Not downloaded"
+        AcquisitionMode = "Official source page / optional direct download"
+        DownloadReadyStatus = $readiness
+        DownloadEnabled = $enabled
+        InstallEnabled = "No"
+        DirectDownloadURL = $directUrl
+        DirectDownloadHost = $directHostName
+        LocalFileName = (Get-DefaultLocalFileName -ToolName $ToolName -DirectDownloadURL $directUrl)
+        DownloadPathMode = "UserProfileStagingThenCompleted"
+        DownloadManifest = $Script:DownloadManifestCsv
+        CopyDownloadedFileToBuild = "No"
+        SourcePublishedHash = ""
+        HashAlgorithm = "SHA256"
+        HashSourceURL = ""
+        InstallerType = "ManualOrPortable"
+        SilentInstallArgs = ""
+        InstallCommand = ""
+        InstallScope = "Portable or user-selected"
+        Notes = $Notes
+    }
+}
+
+function Get-RequiredToolListHeaders {
+    return @(
+        "Include", "Purpose", "PackageLevel", "Category", "ToolName", "TargetFolder",
+        "OfficialSourceURL", "DownloadEnabled", "DirectDownloadURL", "LocalFileName",
+        "CopyDownloadedFileToBuild", "SourcePublishedHash", "HashAlgorithm", "HashSourceURL"
+    )
+}
+
+function Test-ToolListSchema {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }
+    $rows = @(Import-Csv -Path $Script:ToolListCsv)
+    $issues = @()
+    if ($rows.Count -eq 0) {
+        $issues += "ToolList_SOURCE_OF_TRUTH.csv contains no rows."
+    }
+    else {
+        $headers = @($rows[0].PSObject.Properties.Name)
+        foreach ($h in (Get-RequiredToolListHeaders)) {
+            if ($headers -notcontains $h) { $issues += "Missing column: $h" }
+        }
+        $ids = @{}
+        foreach ($row in $rows) {
+            if ([string]::IsNullOrWhiteSpace([string]$row.ToolName)) { $issues += "A row is missing ToolName." }
+            if ((Normalize-YesNo $row.DownloadEnabled) -and [string]::IsNullOrWhiteSpace([string]$row.DirectDownloadURL)) {
+                $issues += "DownloadEnabled=Yes but DirectDownloadURL is blank for: $($row.ToolName)"
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$row.DirectDownloadURL) -and -not (Test-HttpsUrl -Url ([string]$row.DirectDownloadURL))) {
+                $issues += "DirectDownloadURL is not HTTPS for: $($row.ToolName)"
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$row.HashAlgorithm) -and ([string]$row.HashAlgorithm).ToUpperInvariant() -ne "SHA256") {
+                $issues += "Only SHA256 is supported in this build for source hash comparisons: $($row.ToolName)"
+            }
+            $key = "{0}|{1}" -f $row.Purpose, $row.ToolName
+            if ($ids.ContainsKey($key)) { $issues += "Duplicate Purpose+ToolName row: $key" } else { $ids[$key] = $true }
+        }
+    }
+    return $issues
+}
+
+function Show-ToolListValidation {
+    Write-Header
+    Write-Host "Source-of-truth validation" -ForegroundColor Cyan
+    Write-Host "File: $Script:ToolListCsv"
+    Write-Host ""
+    $issues = @(Test-ToolListSchema)
+    if ($issues.Count -eq 0) {
+        Write-Host "No blocking source-of-truth list issues found." -ForegroundColor Green
+    }
+    else {
+        Write-Host "Issues found:" -ForegroundColor Yellow
+        foreach ($issue in $issues) { Write-Host " - $issue" -ForegroundColor Yellow }
+    }
+    Pause-Menu
+}
+
+function Export-DownloadReadinessReport {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }
+    $tools = @(Import-Csv -Path $Script:ToolListCsv)
+    $reportPath = Join-Path $Script:PlanningDir "DownloadReadinessReport.csv"
+    $report = @()
+    foreach ($tool in $tools) {
+        $eligible = ((Normalize-YesNo $tool.Include) -and (Normalize-YesNo $tool.DownloadEnabled) -and -not [string]::IsNullOrWhiteSpace([string]$tool.DirectDownloadURL) -and (Test-HttpsUrl -Url ([string]$tool.DirectDownloadURL)))
+        $reason = "Manual review or source page only"
+        if ($eligible) { $reason = "Ready for controlled download" }
+        elseif (-not (Normalize-YesNo $tool.Include)) { $reason = "Include is not Yes" }
+        elseif (-not (Normalize-YesNo $tool.DownloadEnabled)) { $reason = "DownloadEnabled is not Yes" }
+        elseif ([string]::IsNullOrWhiteSpace([string]$tool.DirectDownloadURL)) { $reason = "No direct download URL" }
+        elseif (-not (Test-HttpsUrl -Url ([string]$tool.DirectDownloadURL))) { $reason = "Direct download URL is not HTTPS" }
+        $report += [pscustomobject]@{
+            ReadyForDownload = if ($eligible) { "Yes" } else { "No" }
+            Reason = $reason
+            Include = $tool.Include
+            Purpose = $tool.Purpose
+            Category = $tool.Category
+            ToolName = $tool.ToolName
+            OfficialSourceURL = $tool.OfficialSourceURL
+            OfficialSourceHost = $tool.OfficialSourceHost
+            SourceVettingStatus = $tool.SourceVettingStatus
+            DownloadEnabled = $tool.DownloadEnabled
+            DirectDownloadURL = $tool.DirectDownloadURL
+            DirectDownloadHost = $tool.DirectDownloadHost
+            LocalFileName = $tool.LocalFileName
+            CopyDownloadedFileToBuild = $tool.CopyDownloadedFileToBuild
+            SourcePublishedHash = $tool.SourcePublishedHash
+            HashAlgorithm = $tool.HashAlgorithm
+            HashSourceURL = $tool.HashSourceURL
+        }
+    }
+    $report | Export-Csv -Path $reportPath -NoTypeInformation -Encoding UTF8
+    return $reportPath
+}
+
+function Show-DownloadPreview {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }
+    $tools = @(Import-Csv -Path $Script:ToolListCsv | Where-Object {
+        (Normalize-YesNo $_.Include) -and (Normalize-YesNo $_.DownloadEnabled) -and -not [string]::IsNullOrWhiteSpace([string]$_.DirectDownloadURL)
+    })
+    Write-Header
+    Write-Host "Download preview" -ForegroundColor Cyan
+    Write-Host "Eligible rows from: $Script:ToolListCsv"
+    Write-Host ""
+    if ($tools.Count -eq 0) {
+        Write-Host "No rows are currently eligible for download." -ForegroundColor Yellow
+    }
+    else {
+        $i = 1
+        foreach ($tool in $tools) {
+            $valid = if (Test-HttpsUrl -Url ([string]$tool.DirectDownloadURL)) { "HTTPS" } else { "Blocked: non-HTTPS" }
+            Write-Host "$i. $($tool.ToolName) [$($tool.Purpose) / $($tool.Category)]" -ForegroundColor Green
+            Write-Host "   URL: $($tool.DirectDownloadURL)"
+            Write-Host "   File: $(Get-DownloadFileName -Tool $tool)"
+            Write-Host "   Status: $valid"
+            Write-Host ""
+            $i++
+        }
+    }
+    Pause-Menu
+}
+
+function New-DownloadManifestRow {
+    param(
+        [object]$Tool, [string]$Status, [string]$FilePath, [string]$Sha256, [string]$ErrorMessage,
+        [long]$Bytes = 0, [string]$RunId = "", [string]$HashMatch = "Not checked"
+    )
+    [pscustomobject]@{
+        Timestamp = (Get-Date).ToString("o")
+        DownloadRunId = $RunId
+        Status = $Status
+        ToolName = [string]$Tool.ToolName
+        Purpose = [string]$Tool.Purpose
+        Category = [string]$Tool.Category
+        OfficialSourceURL = [string]$Tool.OfficialSourceURL
+        OfficialSourceHost = (Get-SourceHost -Url ([string]$Tool.OfficialSourceURL))
+        DirectDownloadURL = [string]$Tool.DirectDownloadURL
+        DirectDownloadHost = (Get-SourceHost -Url ([string]$Tool.DirectDownloadURL))
+        LocalFileName = (Get-DownloadFileName -Tool $Tool)
+        DownloadedFilePath = $FilePath
+        SHA256 = $Sha256
+        Bytes = $Bytes
+        SourcePublishedHash = [string]$Tool.SourcePublishedHash
+        HashAlgorithm = if ($Tool.HashAlgorithm) { [string]$Tool.HashAlgorithm } else { "SHA256" }
+        HashSourceURL = [string]$Tool.HashSourceURL
+        HashMatch = $HashMatch
+        SourceVettingStatus = [string]$Tool.SourceVettingStatus
+        SourceVettingNotes = [string]$Tool.SourceVettingNotes
+        HashVerificationReminder = "Compare this SHA-256 against a publisher/source-published hash when available. If no publisher hash is available, this hash only records what was downloaded locally."
+        Error = $ErrorMessage
+    }
+}
+
+function Compare-SourcePublishedHash {
+    param([object]$Tool, [string]$Sha256)
+    if ([string]::IsNullOrWhiteSpace([string]$Tool.SourcePublishedHash)) { return "No source hash provided" }
+    $alg = if ($Tool.HashAlgorithm) { ([string]$Tool.HashAlgorithm).ToUpperInvariant() } else { "SHA256" }
+    if ($alg -ne "SHA256") { return "Unsupported hash algorithm" }
+    $expected = ([string]$Tool.SourcePublishedHash).Trim().ToUpperInvariant()
+    $actual = ([string]$Sha256).Trim().ToUpperInvariant()
+    if ($expected -eq $actual) { return "Match" }
+    return "Mismatch"
+}
+
+function Get-CompletedDownloadPathForTool {
+    param([object]$Tool)
+    $toolNameSafe = Get-SafePathPart -Value ([string]$Tool.ToolName)
+    $purposeSafe = Get-SafePathPart -Value ([string]$Tool.Purpose)
+    $destDir = Join-Path (Join-Path $Script:DownloadCompletedDir $purposeSafe) $toolNameSafe
+    return (Join-Path $destDir (Get-DownloadFileName -Tool $Tool))
+}
+
+function Get-LatestSuccessfulDownloadForTool {
+    param([object]$Tool)
+    if (-not (Test-Path $Script:DownloadManifestCsv)) { return $null }
+    $rows = @(Import-Csv -Path $Script:DownloadManifestCsv | Where-Object {
+        $_.Status -in @("Success", "ExistingFileHashed") -and $_.ToolName -eq $Tool.ToolName -and $_.Purpose -eq $Tool.Purpose -and (Test-Path ([string]$_.DownloadedFilePath))
+    } | Sort-Object Timestamp -Descending)
+    if ($rows.Count -gt 0) { return $rows[0] }
+    return $null
+}
+
+function Invoke-EnabledDownloads {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }
+    $issues = @(Test-ToolListSchema)
+    if ($issues.Count -gt 0) {
+        Write-Header
+        Write-Host "Fix source-of-truth issues before downloading." -ForegroundColor Yellow
+        foreach ($issue in $issues) { Write-Host " - $issue" -ForegroundColor Yellow }
+        Pause-Menu
+        return
+    }
+    $tools = @(Import-Csv -Path $Script:ToolListCsv | Where-Object {
+        (Normalize-YesNo $_.Include) -and (Normalize-YesNo $_.DownloadEnabled) -and -not [string]::IsNullOrWhiteSpace([string]$_.DirectDownloadURL)
+    })
+    Write-Header
+    Write-Host "Download enabled source-of-truth items" -ForegroundColor Cyan
+    Write-Host "Source of truth: $Script:ToolListCsv"
+    Write-Host "Download root:    $Script:DownloadRoot"
+    Write-Host "Manifest:         $Script:DownloadManifestCsv"
+    Write-Host "Items to attempt: $($tools.Count)"
+    Write-Host ""
+    Write-Host "Files are downloaded to a user-profile staging folder, hashed, then moved to completed downloads." -ForegroundColor Gray
+    Write-Host "The tool does not install software or claim the publisher hash was verified unless SourcePublishedHash is provided and matches." -ForegroundColor Yellow
+    Write-Host ""
+    if ($tools.Count -eq 0) {
+        Write-Host "No rows are enabled for download. Set Include=Yes, DownloadEnabled=Yes, and DirectDownloadURL in ToolList_SOURCE_OF_TRUTH.csv." -ForegroundColor Yellow
+        Pause-Menu
+        return
+    }
+    Write-Host "Existing completed file behavior:" -ForegroundColor Cyan
+    Write-Host " 1. Skip download and hash existing files"
+    Write-Host " 2. Overwrite existing files"
+    Write-Host " 3. Prompt for each existing file"
+    $existingChoice = Read-MenuChoice -Prompt "Existing file option" -Min 1 -Max 3
+    $confirm = Read-Host "Type DOWNLOAD to start"
+    if ($confirm -ne "DOWNLOAD") { Write-Host "Download cancelled." -ForegroundColor Yellow; Pause-Menu; return }
+
+    $runId = [guid]::NewGuid().ToString("N")
+    $manifestRows = @()
+    foreach ($tool in $tools) {
+        $fileName = Get-DownloadFileName -Tool $tool
+        $completedPath = Get-CompletedDownloadPathForTool -Tool $tool
+        $destDir = Split-Path -Parent $completedPath
+        New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+        Write-Host "Downloading: $($tool.ToolName)" -ForegroundColor Cyan
+        Write-Host "  From: $($tool.DirectDownloadURL)" -ForegroundColor DarkGray
+
+        if (-not (Test-HttpsUrl -Url ([string]$tool.DirectDownloadURL)) ) {
+            $manifestRows += New-DownloadManifestRow -Tool $tool -Status "BlockedNonHttps" -FilePath "" -Sha256 "" -ErrorMessage "Only HTTPS direct downloads are allowed." -Bytes 0 -RunId $runId
+            Write-Host "  Blocked: only HTTPS direct downloads are allowed." -ForegroundColor Yellow
+            continue
+        }
+
+        if (Test-Path $completedPath) {
+            $useExisting = $false
+            if ($existingChoice -eq 1) { $useExisting = $true }
+            elseif ($existingChoice -eq 3) {
+                $ans = Read-Host "Existing file found. Use existing instead of re-downloading? (Y/N)"
+                if ($ans -in @("Y", "y", "Yes", "yes")) { $useExisting = $true }
+            }
+            if ($useExisting) {
+                $hash = Get-FileHash -Algorithm SHA256 -Path $completedPath
+                $bytes = (Get-Item $completedPath).Length
+                $hashMatch = Compare-SourcePublishedHash -Tool $tool -Sha256 $hash.Hash
+                $manifestRows += New-DownloadManifestRow -Tool $tool -Status "ExistingFileHashed" -FilePath $completedPath -Sha256 $hash.Hash -ErrorMessage "" -Bytes $bytes -RunId $runId -HashMatch $hashMatch
+                Write-Host "  Existing file hashed. SHA-256: $($hash.Hash)" -ForegroundColor Green
+                continue
+            }
+        }
+
+        $stagingName = "{0}-{1}" -f ([guid]::NewGuid().ToString("N")), $fileName
+        $stagingPath = Join-Path $Script:DownloadStagingDir $stagingName
+        try {
+            Invoke-WebRequest -Uri ([string]$tool.DirectDownloadURL) -OutFile $stagingPath -UseBasicParsing -MaximumRedirection 5
+            $hash = Get-FileHash -Algorithm SHA256 -Path $stagingPath
+            $bytes = (Get-Item $stagingPath).Length
+            if (Test-Path $completedPath) { Remove-Item -Force $completedPath }
+            Move-Item -Force -Path $stagingPath -Destination $completedPath
+            $hashMatch = Compare-SourcePublishedHash -Tool $tool -Sha256 $hash.Hash
+            $manifestRows += New-DownloadManifestRow -Tool $tool -Status "Success" -FilePath $completedPath -Sha256 $hash.Hash -ErrorMessage "" -Bytes $bytes -RunId $runId -HashMatch $hashMatch
+            Write-Host "  Success. SHA-256: $($hash.Hash)" -ForegroundColor Green
+            if ($hashMatch -eq "Mismatch") { Write-Host "  WARNING: Source-published hash mismatch." -ForegroundColor Yellow }
+        }
+        catch {
+            $err = $_.Exception.Message
+            if (Test-Path $stagingPath) { Remove-Item -Force $stagingPath -ErrorAction SilentlyContinue }
+            $manifestRows += New-DownloadManifestRow -Tool $tool -Status "Failed" -FilePath "" -Sha256 "" -ErrorMessage $err -Bytes 0 -RunId $runId
+            Write-Host "  Failed: $err" -ForegroundColor Yellow
+        }
+    }
+    Export-DownloadManifest -Rows $manifestRows
+    Write-Host ""
+    Write-Host "Download manifest updated: $Script:DownloadManifestCsv" -ForegroundColor Green
+    Pause-Menu
+}
+
+function Hash-CompletedDownloads {
+    Ensure-SessionDir
+    $files = @()
+    if (Test-Path $Script:DownloadCompletedDir) { $files = @(Get-ChildItem -Path $Script:DownloadCompletedDir -File -Recurse) }
+    Write-Header
+    Write-Host "Hash completed downloads" -ForegroundColor Cyan
+    Write-Host "Completed folder: $Script:DownloadCompletedDir"
+    Write-Host "Files found: $($files.Count)"
+    Write-Host ""
+    if ($files.Count -eq 0) { Write-Host "No completed downloads found." -ForegroundColor Yellow; Pause-Menu; return }
+    $outPath = Join-Path $Script:DownloadRoot "CompletedDownloads_SHA256SUMS.txt"
+    $lines = @()
+    foreach ($file in $files) {
+        $hash = Get-FileHash -Algorithm SHA256 -Path $file.FullName
+        $relative = $file.FullName.Substring($Script:DownloadCompletedDir.Length).TrimStart('\')
+        $lines += "$($hash.Hash)  $relative"
+    }
+    $lines | Set-Content -Path $outPath -Encoding ASCII
+    Write-Host "Wrote: $outPath" -ForegroundColor Green
+    Pause-Menu
+}
+
+function Write-ToolSourceCards {
+    param([string]$Root, [object[]]$Tools)
+    foreach ($tool in $Tools) {
+        if ([string]::IsNullOrWhiteSpace($tool.TargetFolder)) { continue }
+        $toolDir = Join-Path $Root $tool.TargetFolder
+        New-Item -ItemType Directory -Force -Path $toolDir | Out-Null
+        $safeName = ($tool.ToolName -replace '[^A-Za-z0-9_.-]', '_')
+        $cardPath = Join-Path $toolDir ("SOURCE_" + $safeName + ".txt")
+        $content = @"
+Tool/source record: $($tool.ToolName)
+Purpose: $($tool.Purpose)
+Category: $($tool.Category)
+Package level: $($tool.PackageLevel)
+Official source URL: $($tool.OfficialSourceURL)
+Direct download URL: $($tool.DirectDownloadURL)
+Source notes: $($tool.SourceNotes)
+License notes: $($tool.LicenseNotes)
+Download status: $($tool.DownloadStatus)
+
+Boundary:
+USB Swiss Army Knife records source information and may optionally download explicitly enabled direct-download rows. It does not install tools, run installers, format drives, erase drives, or redistribute third-party tools in the project repository.
+"@
+        Set-Content -Path $cardPath -Value $content -Encoding UTF8
+
+        if (Normalize-YesNo $tool.CopyDownloadedFileToBuild) {
+            $latest = Get-LatestSuccessfulDownloadForTool -Tool $tool
+            if ($null -ne $latest) {
+                $downloadCopyDir = Join-Path $toolDir "downloaded_source_files"
+                New-Item -ItemType Directory -Force -Path $downloadCopyDir | Out-Null
+                Copy-Item -Force -Path ([string]$latest.DownloadedFilePath) -Destination (Join-Path $downloadCopyDir ([System.IO.Path]::GetFileName([string]$latest.DownloadedFilePath)))
+                $note = "Copied downloaded source file from completed downloads. No installer was executed. SHA256: $($latest.SHA256)"
+                Set-Content -Path (Join-Path $downloadCopyDir "README_DOWNLOADED_FILE.txt") -Value $note -Encoding UTF8
+            }
+        }
+    }
+}
+
+function Show-DownloadInstallInfrastructure {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:DownloadQueueCsv)) { Export-EditableBuildLists }
+    while ($true) {
+        Write-Header
+        Write-Host "Download manager" -ForegroundColor Cyan
+        Write-Host "Source of truth: $Script:ToolListCsv"
+        Write-Host "Queue/info file:  $Script:DownloadQueueCsv"
+        Write-Host "Manifest:         $Script:DownloadManifestCsv"
+        Write-Host "Download root:    $Script:DownloadRoot"
+        Write-Host ""
+        Write-Host "Downloads only run for rows with Include=Yes, DownloadEnabled=Yes, and DirectDownloadURL populated." -ForegroundColor Yellow
+        Write-Host "Downloaded files are staged under your profile, hashed with SHA-256, then moved to completed downloads. Installs remain disabled."
+        Write-Host ""
+        Write-Host " 1. Open planning folder"
+        Write-Host " 2. Open ToolList_SOURCE_OF_TRUTH.csv"
+        Write-Host " 3. Validate source-of-truth list"
+        Write-Host " 4. Download preview"
+        Write-Host " 5. Regenerate queue from current source-of-truth list"
+        Write-Host " 6. Export download readiness report"
+        Write-Host " 7. Run enabled downloads"
+        Write-Host " 8. Hash completed downloads"
+        Write-Host " 9. Open downloads folder"
+        Write-Host "10. Open download manifest"
+        Write-Host "11. Back"
+        Write-Host ""
+        $choice = Read-MenuChoice -Prompt "Choice" -Min 1 -Max 11
+        if ($choice -eq 1) { Start-Process explorer.exe $Script:PlanningDir; Pause-Menu }
+        elseif ($choice -eq 2) { if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }; Invoke-Item $Script:ToolListCsv; Pause-Menu }
+        elseif ($choice -eq 3) { Show-ToolListValidation }
+        elseif ($choice -eq 4) { Show-DownloadPreview }
+        elseif ($choice -eq 5) {
+            $tools = @(Import-CurrentToolRows)
+            Export-DownloadInstallQueue -ToolRows $tools
+            Write-Host "Queue regenerated: $Script:DownloadQueueCsv" -ForegroundColor Green
+            Pause-Menu
+        }
+        elseif ($choice -eq 6) {
+            $path = Export-DownloadReadinessReport
+            Write-Host "Readiness report exported: $path" -ForegroundColor Green
+            Pause-Menu
+        }
+        elseif ($choice -eq 7) { Invoke-EnabledDownloads }
+        elseif ($choice -eq 8) { Hash-CompletedDownloads }
+        elseif ($choice -eq 9) { Start-Process explorer.exe $Script:DownloadRoot; Pause-Menu }
+        elseif ($choice -eq 10) {
+            if (Test-Path $Script:DownloadManifestCsv) { Invoke-Item $Script:DownloadManifestCsv }
+            else { Write-Host "No download manifest exists yet." -ForegroundColor Yellow }
+            Pause-Menu
+        }
+        elseif ($choice -eq 11) { return }
+    }
+}
+
+
+# ---------------------------------------------------------------------------
+# v0.2.3 transparency and editable source-of-truth overrides
+# ---------------------------------------------------------------------------
+
+function Get-ToolListEditingGuidePath { return (Join-Path $Script:PlanningDir "TOOLLIST_SOURCE_OF_TRUTH_EDITING_GUIDE.txt") }
+function Get-CustomToolTemplatePath { return (Join-Path $Script:PlanningDir "CustomToolRow_TEMPLATE.csv") }
+function Get-DownloadTransparencyPlanPath { return (Join-Path $Script:PlanningDir "DownloadTransparencyPlan.csv") }
+
+function Get-RecommendedToolListHeaders {
+    return @(
+        "Include", "Purpose", "PackageLevel", "Category", "ToolName", "Version", "TargetFolder",
+        "OfficialSourceURL", "OfficialSourceHost", "SourceNotes", "LicenseNotes",
+        "SourceVettingStatus", "SourceVettingNotes", "SourceVettedOn",
+        "DownloadStatus", "AcquisitionMode", "DownloadReadyStatus", "DownloadEnabled", "InstallEnabled",
+        "DirectDownloadURL", "DirectDownloadHost", "LocalFileName", "DownloadPathMode", "DownloadManifest",
+        "CopyDownloadedFileToBuild", "SourcePublishedHash", "HashAlgorithm", "HashSourceURL",
+        "InstallerType", "SilentInstallArgs", "InstallCommand", "InstallScope",
+        "UserEditableFields", "TransparencyNote", "EditWarning", "Notes"
+    )
+}
+
+function Get-RequiredToolListHeaders {
+    return @(
+        "Include", "Purpose", "PackageLevel", "Category", "ToolName", "TargetFolder",
+        "OfficialSourceURL", "DownloadEnabled", "DirectDownloadURL", "LocalFileName",
+        "CopyDownloadedFileToBuild", "SourcePublishedHash", "HashAlgorithm", "HashSourceURL"
+    )
+}
+
+function Get-SourceHost {
+    param([string]$Url)
+    if ([string]::IsNullOrWhiteSpace($Url)) { return "" }
+    try { return ([System.Uri]$Url).Host.ToLowerInvariant() } catch { return "Unparseable URL" }
+}
+
+function New-ToolRow {
+    param(
+        [string]$Purpose, [string]$RequiredLevel, [string]$Category, [string]$ToolName,
+        [string]$TargetFolder, [string]$OfficialSourceURL, [string]$LicenseNotes,
+        [string]$SourceNotes, [string]$Notes
+    )
+    $directUrl = Get-DefaultDirectDownloadUrl -ToolName $ToolName
+    $enabled = Get-DefaultDownloadEnabled -ToolName $ToolName
+    $hostName = Get-SourceHost -Url $OfficialSourceURL
+    $directHostName = Get-SourceHost -Url $directUrl
+    $readiness = "Manual source review"
+    if ($enabled -eq "Yes" -and -not [string]::IsNullOrWhiteSpace($directUrl)) { $readiness = "Direct download enabled" }
+    elseif (-not [string]::IsNullOrWhiteSpace($directUrl)) { $readiness = "Direct URL recorded but disabled" }
+
+    [pscustomobject]@{
+        Include = "Yes"
+        Purpose = $Purpose
+        PackageLevel = $RequiredLevel
+        Category = $Category
+        ToolName = $ToolName
+        Version = ""
+        TargetFolder = $TargetFolder
+        OfficialSourceURL = $OfficialSourceURL
+        OfficialSourceHost = $hostName
+        SourceNotes = $SourceNotes
+        LicenseNotes = $LicenseNotes
+        SourceVettingStatus = (Get-SourceVettingStatus -ToolName $ToolName -OfficialSourceURL $OfficialSourceURL)
+        SourceVettingNotes = (Get-SourceVettingNotes -ToolName $ToolName -OfficialSourceURL $OfficialSourceURL)
+        SourceVettedOn = "2026-07-28"
+        DownloadStatus = "Not downloaded"
+        AcquisitionMode = "Official source page / optional direct download"
+        DownloadReadyStatus = $readiness
+        DownloadEnabled = $enabled
+        InstallEnabled = "No"
+        DirectDownloadURL = $directUrl
+        DirectDownloadHost = $directHostName
+        LocalFileName = (Get-DefaultLocalFileName -ToolName $ToolName -DirectDownloadURL $directUrl)
+        DownloadPathMode = "UserProfileStagingThenCompleted"
+        DownloadManifest = $Script:DownloadManifestCsv
+        CopyDownloadedFileToBuild = "No"
+        SourcePublishedHash = ""
+        HashAlgorithm = "SHA256"
+        HashSourceURL = ""
+        InstallerType = "ManualOrPortable"
+        SilentInstallArgs = ""
+        InstallCommand = ""
+        InstallScope = "Portable or user-selected"
+        UserEditableFields = "Include; TargetFolder; OfficialSourceURL; DirectDownloadURL; LocalFileName; DownloadEnabled; SourcePublishedHash; HashSourceURL; Notes"
+        TransparencyNote = "OfficialSourceURL is the human review page. DirectDownloadURL is the exact address used by the download manager when DownloadEnabled=Yes."
+        EditWarning = "Only enable direct downloads from sources you trust. Review license terms and compare local SHA-256 to source-published hashes when available."
+        Notes = $Notes
+    }
+}
+
+function Write-ToolListEditingGuide {
+    Ensure-SessionDir
+    $path = Get-ToolListEditingGuidePath
+    $content = @"
+USB Swiss Army Knife - ToolList_SOURCE_OF_TRUTH.csv Editing Guide
+
+This CSV is the source of truth for software source records and downloads.
+The builder reads this file directly when deciding which tools are included.
+
+Most important columns:
+- Include: Yes includes the row. No excludes it. Do not delete rows unless you want to.
+- Purpose: IT Support, DFIR, OSINT, Everything, or your own label.
+- PackageLevel: Minimal, Solid, Overkill, or your own label.
+- Category: Grouping shown in source records.
+- ToolName: Display name for the tool/source record.
+- TargetFolder: Relative destination folder under the selected USB/local toolkit root.
+- OfficialSourceURL: Human review page where the user can inspect the publisher/source.
+- DirectDownloadURL: Exact URL the Download Manager will fetch when enabled.
+- DownloadEnabled: Yes allows controlled download. No keeps the row informational only.
+- LocalFileName: File name to use in the completed downloads folder.
+- CopyDownloadedFileToBuild: Yes copies the downloaded file into downloaded_source_files under the target folder. No leaves it in completed downloads.
+- SourcePublishedHash: Optional publisher/source SHA-256 hash.
+- HashAlgorithm: SHA256 is the only comparison algorithm supported in this build.
+- HashSourceURL: Page where the publisher/source hash was found.
+
+Adding your own tools:
+1. Copy a similar row or use CustomToolRow_TEMPLATE.csv.
+2. Fill ToolName, Category, TargetFolder, OfficialSourceURL, and Notes.
+3. Leave DownloadEnabled=No until you have reviewed the direct download URL and license/source terms.
+4. Set DownloadEnabled=Yes only when DirectDownloadURL is the exact URL you want fetched.
+5. Run Advanced / utility menu > Download manager > Validate source-of-truth list.
+6. Run Download preview before downloading.
+
+Transparency rule:
+The user should be able to see both the official source page and the exact direct download URL before anything is downloaded.
+
+Boundary:
+This project creates structures, editable lists, source records, and controlled downloads only. It does not install tools, run installers, format drives, erase drives, or redistribute third-party software in the project repository.
+"@
+    Set-Content -Path $path -Value $content -Encoding UTF8
+    return $path
+}
+
+function Export-CustomToolRowTemplate {
+    Ensure-SessionDir
+    $path = Get-CustomToolTemplatePath
+    $row = [pscustomobject]@{
+        Include = "Yes"
+        Purpose = "Custom"
+        PackageLevel = "Custom"
+        Category = "Custom Tools"
+        ToolName = "Example Tool Name"
+        Version = ""
+        TargetFolder = "tools/custom/example-tool"
+        OfficialSourceURL = "https://example.com/tool"
+        OfficialSourceHost = "example.com"
+        SourceNotes = "Official human review page. Replace before use."
+        LicenseNotes = "Review license before download/use."
+        SourceVettingStatus = "User supplied"
+        SourceVettingNotes = "Added by user in ToolList_SOURCE_OF_TRUTH.csv."
+        SourceVettedOn = ""
+        DownloadStatus = "Not downloaded"
+        AcquisitionMode = "User supplied official source"
+        DownloadReadyStatus = "User review required"
+        DownloadEnabled = "No"
+        InstallEnabled = "No"
+        DirectDownloadURL = ""
+        DirectDownloadHost = ""
+        LocalFileName = "example-tool.zip"
+        DownloadPathMode = "UserProfileStagingThenCompleted"
+        DownloadManifest = $Script:DownloadManifestCsv
+        CopyDownloadedFileToBuild = "No"
+        SourcePublishedHash = ""
+        HashAlgorithm = "SHA256"
+        HashSourceURL = ""
+        InstallerType = "ManualOrPortable"
+        SilentInstallArgs = ""
+        InstallCommand = ""
+        InstallScope = "Portable or user-selected"
+        UserEditableFields = "Include; TargetFolder; OfficialSourceURL; DirectDownloadURL; LocalFileName; DownloadEnabled; SourcePublishedHash; HashSourceURL; Notes"
+        TransparencyNote = "OfficialSourceURL is the review page. DirectDownloadURL is the exact file address used only when DownloadEnabled=Yes."
+        EditWarning = "Do not enable downloads until the source, license, and exact URL have been reviewed."
+        Notes = "Replace this example row with your own tool details."
+    }
+    @($row) | Export-Csv -Path $path -NoTypeInformation -Encoding UTF8
+    return $path
+}
+
+function Export-DownloadTransparencyPlan {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }
+    $tools = @(Import-Csv -Path $Script:ToolListCsv)
+    $outPath = Get-DownloadTransparencyPlanPath
+    $rows = @()
+    foreach ($tool in $tools) {
+        $eligible = ((Normalize-YesNo $tool.Include) -and (Normalize-YesNo $tool.DownloadEnabled) -and -not [string]::IsNullOrWhiteSpace([string]$tool.DirectDownloadURL) -and (Test-HttpsUrl -Url ([string]$tool.DirectDownloadURL)))
+        $completedPath = ""
+        if ($eligible) { $completedPath = Get-CompletedDownloadPathForTool -Tool $tool }
+        $rows += [pscustomobject]@{
+            Include = $tool.Include
+            DownloadEnabled = $tool.DownloadEnabled
+            ReadyForDownload = if ($eligible) { "Yes" } else { "No" }
+            ToolName = $tool.ToolName
+            Purpose = $tool.Purpose
+            PackageLevel = $tool.PackageLevel
+            Category = $tool.Category
+            TargetFolder = $tool.TargetFolder
+            OfficialReviewPage = $tool.OfficialSourceURL
+            OfficialReviewHost = (Get-SourceHost -Url ([string]$tool.OfficialSourceURL))
+            ExactDirectDownloadURL = $tool.DirectDownloadURL
+            ExactDirectDownloadHost = (Get-SourceHost -Url ([string]$tool.DirectDownloadURL))
+            LocalFileName = (Get-DownloadFileName -Tool $tool)
+            CompletedDownloadPath = $completedPath
+            CopyDownloadedFileToBuild = $tool.CopyDownloadedFileToBuild
+            SourcePublishedHash = $tool.SourcePublishedHash
+            HashAlgorithm = $tool.HashAlgorithm
+            HashSourceURL = $tool.HashSourceURL
+            TransparencyNote = "Review OfficialReviewPage and ExactDirectDownloadURL before enabling downloads."
+            UserEditable = "Edit ToolList_SOURCE_OF_TRUTH.csv, not this informational report."
+        }
+    }
+    $rows | Export-Csv -Path $outPath -NoTypeInformation -Encoding UTF8
+    return $outPath
+}
+
+function Export-EditableBuildLists {
+    Ensure-SessionDir
+    $folders = @(Get-FilteredFolderRows -Purpose $Script:Purpose -Level $Script:PackageLevel)
+    $tools = @(Get-FilteredToolRows -Purpose $Script:Purpose -Level $Script:PackageLevel)
+    $folders | Export-Csv -Path $Script:FolderListCsv -NoTypeInformation -Encoding UTF8
+    $tools | Export-Csv -Path $Script:ToolListCsv -NoTypeInformation -Encoding UTF8
+    Export-DownloadInstallQueue -ToolRows $tools
+    Write-ToolListEditingGuide | Out-Null
+    Export-CustomToolRowTemplate | Out-Null
+    Export-DownloadTransparencyPlan | Out-Null
+    if ($Script:OutputFormat -eq "CSV+XLSX") { Export-BuildWorkbookXlsx -FolderRows $folders -ToolRows $tools }
+}
+
+function Test-ToolListSchema {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }
+    $rows = @(Import-Csv -Path $Script:ToolListCsv)
+    $issues = @()
+    if ($rows.Count -eq 0) {
+        $issues += "ToolList_SOURCE_OF_TRUTH.csv contains no rows."
+    }
+    else {
+        $headers = @($rows[0].PSObject.Properties.Name)
+        foreach ($h in (Get-RequiredToolListHeaders)) {
+            if ($headers -notcontains $h) { $issues += "Missing required column: $h" }
+        }
+        $ids = @{}
+        foreach ($row in $rows) {
+            if ([string]::IsNullOrWhiteSpace([string]$row.ToolName)) { $issues += "A row is missing ToolName." }
+            if ([string]::IsNullOrWhiteSpace([string]$row.TargetFolder)) { $issues += "TargetFolder is blank for: $($row.ToolName)" }
+            if ([string]::IsNullOrWhiteSpace([string]$row.OfficialSourceURL)) { $issues += "OfficialSourceURL is blank for: $($row.ToolName)" }
+            if (-not [string]::IsNullOrWhiteSpace([string]$row.OfficialSourceURL) -and -not (Test-HttpsUrl -Url ([string]$row.OfficialSourceURL))) {
+                $issues += "OfficialSourceURL is not HTTPS for: $($row.ToolName)"
+            }
+            if ((Normalize-YesNo $row.DownloadEnabled) -and [string]::IsNullOrWhiteSpace([string]$row.DirectDownloadURL)) {
+                $issues += "DownloadEnabled=Yes but DirectDownloadURL is blank for: $($row.ToolName)"
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$row.DirectDownloadURL) -and -not (Test-HttpsUrl -Url ([string]$row.DirectDownloadURL))) {
+                $issues += "DirectDownloadURL is not HTTPS for: $($row.ToolName)"
+            }
+            if ((Normalize-YesNo $row.DownloadEnabled) -and [string]::IsNullOrWhiteSpace([string]$row.LocalFileName)) {
+                $issues += "DownloadEnabled=Yes but LocalFileName is blank for: $($row.ToolName)"
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$row.HashAlgorithm) -and ([string]$row.HashAlgorithm).ToUpperInvariant() -ne "SHA256") {
+                $issues += "Only SHA256 is supported in this build for source hash comparisons: $($row.ToolName)"
+            }
+            $key = "{0}|{1}|{2}" -f $row.Purpose, $row.Category, $row.ToolName
+            if ($ids.ContainsKey($key)) { $issues += "Duplicate Purpose+Category+ToolName row: $key" } else { $ids[$key] = $true }
+        }
+    }
+    return $issues
+}
+
+function Show-ToolListValidation {
+    Write-Header
+    Write-Host "Source-of-truth validation" -ForegroundColor Cyan
+    Write-Host "File: $Script:ToolListCsv"
+    Write-Host "Custom tool rows are allowed when the required columns are present."
+    Write-Host "The builder uses Include=Yes and TargetFolder from this file when writing tool source records."
+    Write-Host "Downloads use DirectDownloadURL only when DownloadEnabled=Yes." -ForegroundColor Yellow
+    Write-Host ""
+    $issues = @(Test-ToolListSchema)
+    if ($issues.Count -eq 0) {
+        Write-Host "No blocking source-of-truth list issues found." -ForegroundColor Green
+    }
+    else {
+        Write-Host "Issues found:" -ForegroundColor Yellow
+        foreach ($issue in $issues) { Write-Host " - $issue" -ForegroundColor Yellow }
+    }
+    Pause-Menu
+}
+
+function Show-DownloadPreview {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }
+    $tools = @(Import-Csv -Path $Script:ToolListCsv | Where-Object {
+        (Normalize-YesNo $_.Include) -and (Normalize-YesNo $_.DownloadEnabled) -and -not [string]::IsNullOrWhiteSpace([string]$_.DirectDownloadURL)
+    })
+    Write-Header
+    Write-Host "Download preview - exact sources" -ForegroundColor Cyan
+    Write-Host "Source of truth: $Script:ToolListCsv"
+    Write-Host "Only rows with Include=Yes and DownloadEnabled=Yes are listed here."
+    Write-Host ""
+    if ($tools.Count -eq 0) {
+        Write-Host "No rows are currently eligible for download." -ForegroundColor Yellow
+    }
+    else {
+        $i = 1
+        foreach ($tool in $tools) {
+            $valid = if (Test-HttpsUrl -Url ([string]$tool.DirectDownloadURL)) { "HTTPS allowed" } else { "Blocked: non-HTTPS" }
+            $completedPath = Get-CompletedDownloadPathForTool -Tool $tool
+            Write-Host "$i. $($tool.ToolName)" -ForegroundColor Green
+            Write-Host "   Purpose/category: $($tool.Purpose) / $($tool.Category)"
+            Write-Host "   Official review page: $($tool.OfficialSourceURL)"
+            Write-Host "   Official host:        $(Get-SourceHost -Url ([string]$tool.OfficialSourceURL))"
+            Write-Host "   Direct download URL:  $($tool.DirectDownloadURL)"
+            Write-Host "   Direct host:          $(Get-SourceHost -Url ([string]$tool.DirectDownloadURL))"
+            Write-Host "   Local file name:      $(Get-DownloadFileName -Tool $tool)"
+            Write-Host "   Completed path:       $completedPath"
+            Write-Host "   Target folder:        $($tool.TargetFolder)"
+            Write-Host "   Source hash URL:      $($tool.HashSourceURL)"
+            Write-Host "   Status:               $valid"
+            Write-Host ""
+            $i++
+        }
+    }
+    Pause-Menu
+}
+
+function Confirm-EditableLists {
+    Export-EditableBuildLists
+    Write-Header
+    Write-Host "Editable build lists created" -ForegroundColor Cyan
+    Write-Host "Planning folder: $Script:PlanningDir"
+    Write-Host "Software source of truth: $Script:ToolListCsv" -ForegroundColor Green
+    Write-Host "Editing guide:            $(Get-ToolListEditingGuidePath)"
+    Write-Host "Custom row template:      $(Get-CustomToolTemplatePath)"
+    Write-Host "Transparency plan/info:   $(Get-DownloadTransparencyPlanPath)"
+    Write-Host "Folder plan/info:         $Script:FolderListCsv"
+    if ($Script:OutputFormat -eq "CSV+XLSX") { Write-Host "XLSX workbook/info:        $Script:BuildWorkbookXlsx" }
+    Write-Host ""
+    Write-Host "Edit ToolList_SOURCE_OF_TRUTH.csv before writing the build." -ForegroundColor Yellow
+    Write-Host "- Include=Yes/No controls whether the tool source record is used."
+    Write-Host "- TargetFolder controls where the tool source record/future downloaded files land."
+    Write-Host "- DirectDownloadURL is the exact URL the download manager fetches when DownloadEnabled=Yes."
+    Write-Host "- Add tools by adding rows with matching columns. Use CustomToolRow_TEMPLATE.csv as a starting point."
+    Write-Host "- FolderStructure.csv, DownloadTransparencyPlan.csv, DownloadInstallQueue_INFRASTRUCTURE.csv, and XLSX are informational aids."
+    Write-Host ""
+    Write-Host " 1. Open planning folder"
+    Write-Host " 2. Open source-of-truth CSV"
+    Write-Host " 3. Continue using current lists"
+    Write-Host " 4. Stop and resume later"
+    Write-Host ""
+    $choice = Read-MenuChoice -Prompt "Choice" -Min 1 -Max 4
+    if ($choice -eq 1) { Start-Process explorer.exe $Script:PlanningDir; Pause-Menu }
+    elseif ($choice -eq 2) { Invoke-Item $Script:ToolListCsv; Pause-Menu }
+    elseif ($choice -eq 4) { Save-Session; throw "Stopped for list editing." }
+}
+
+function Show-DownloadInstallInfrastructure {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:DownloadQueueCsv)) { Export-EditableBuildLists }
+    while ($true) {
+        Write-Header
+        Write-Host "Download manager" -ForegroundColor Cyan
+        Write-Host "Source of truth: $Script:ToolListCsv" -ForegroundColor Green
+        Write-Host "Manifest:        $Script:DownloadManifestCsv"
+        Write-Host "Download root:   $Script:DownloadRoot"
+        Write-Host ""
+        Write-Host "Transparency model:" -ForegroundColor Yellow
+        Write-Host "- Users can edit OfficialSourceURL, DirectDownloadURL, TargetFolder, and Include in the source-of-truth CSV."
+        Write-Host "- DirectDownloadURL is the exact URL fetched. Downloads do not run unless DownloadEnabled=Yes."
+        Write-Host "- Users can add tools by adding rows with matching columns."
+        Write-Host "- This tool downloads and hashes only; it does not install or execute downloaded files."
+        Write-Host ""
+        Write-Host " 1. Open planning folder"
+        Write-Host " 2. Open ToolList_SOURCE_OF_TRUTH.csv"
+        Write-Host " 3. Open editing guide"
+        Write-Host " 4. Create/open custom tool row template"
+        Write-Host " 5. Validate source-of-truth list"
+        Write-Host " 6. Download preview - exact sources"
+        Write-Host " 7. Export transparency plan"
+        Write-Host " 8. Regenerate queue from current source-of-truth list"
+        Write-Host " 9. Export download readiness report"
+        Write-Host "10. Run enabled downloads"
+        Write-Host "11. Hash completed downloads"
+        Write-Host "12. Open downloads folder"
+        Write-Host "13. Open download manifest"
+        Write-Host "14. Back"
+        Write-Host ""
+        $choice = Read-MenuChoice -Prompt "Choice" -Min 1 -Max 14
+        if ($choice -eq 1) { Start-Process explorer.exe $Script:PlanningDir; Pause-Menu }
+        elseif ($choice -eq 2) { if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }; Invoke-Item $Script:ToolListCsv; Pause-Menu }
+        elseif ($choice -eq 3) { $p = Write-ToolListEditingGuide; Invoke-Item $p; Pause-Menu }
+        elseif ($choice -eq 4) { $p = Export-CustomToolRowTemplate; Invoke-Item $p; Pause-Menu }
+        elseif ($choice -eq 5) { Show-ToolListValidation }
+        elseif ($choice -eq 6) { Show-DownloadPreview }
+        elseif ($choice -eq 7) { $p = Export-DownloadTransparencyPlan; Write-Host "Transparency plan exported: $p" -ForegroundColor Green; Pause-Menu }
+        elseif ($choice -eq 8) {
+            $tools = @(Import-CurrentToolRows)
+            Export-DownloadInstallQueue -ToolRows $tools
+            Write-Host "Queue regenerated: $Script:DownloadQueueCsv" -ForegroundColor Green
+            Pause-Menu
+        }
+        elseif ($choice -eq 9) {
+            $path = Export-DownloadReadinessReport
+            Write-Host "Readiness report exported: $path" -ForegroundColor Green
+            Pause-Menu
+        }
+        elseif ($choice -eq 10) { Invoke-EnabledDownloads }
+        elseif ($choice -eq 11) { Hash-CompletedDownloads }
+        elseif ($choice -eq 12) { Start-Process explorer.exe $Script:DownloadRoot; Pause-Menu }
+        elseif ($choice -eq 13) {
+            if (Test-Path $Script:DownloadManifestCsv) { Invoke-Item $Script:DownloadManifestCsv }
+            else { Write-Host "No download manifest exists yet." -ForegroundColor Yellow }
+            Pause-Menu
+        }
+        elseif ($choice -eq 14) { return }
     }
 }
 

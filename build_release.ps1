@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.2.0"
+    [string]$Version = "0.2.3"
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,9 +36,10 @@ $docs = @(
     "UNSIGNED_WINDOWS_NOTICE.md",
     "KNOWN_LIMITATIONS.md",
     "SIMPLE_WORKFLOW.md",
-    "RELEASE_NOTES_v0.2.0.md",
+    "RELEASE_NOTES_v0.2.3.md",
     "DOWNLOAD_WORKFLOW.md",
-    "VETTED_SOURCES_v0.2.0.md",
+    "TRANSPARENCY_WORKFLOW.md",
+    "VETTED_SOURCES_v0.2.3.md",
     "GITHUB_RELEASE_DRAFT.md",
     "RELEASE_CHECKLIST.md",
     "RUN_DEBUG_FROM_POWERSHELL.md"
