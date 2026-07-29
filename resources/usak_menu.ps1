@@ -1,5 +1,5 @@
 <#
-USB Swiss Army Knife console menu v0.2.3
+USB Swiss Army Knife console menu v0.2.9
 
 Bundled PowerShell menu launched by the USB Swiss Army Knife EXE.
 
@@ -14,7 +14,7 @@ Boundary:
 #>
 
 $ErrorActionPreference = "Stop"
-$Script:AppVersion = "0.2.4"
+$Script:AppVersion = "0.2.9"
 $Script:SessionDir = Join-Path $env:USERPROFILE "UsbSwissArmyKnife"
 $Script:SessionPath = Join-Path $Script:SessionDir "guided_session.json"
 $Script:PlanningDir = Join-Path $Script:SessionDir "planning"
@@ -28,6 +28,7 @@ $Script:BuildPlan = @()
 $Script:FolderListCsv = Join-Path $Script:PlanningDir "FolderStructure.csv"
 $Script:ToolListCsv = Join-Path $Script:PlanningDir "ToolList_SOURCE_OF_TRUTH.csv"
 $Script:BuildWorkbookXlsx = Join-Path $Script:PlanningDir "UsbToolkitBuildPlan.xlsx"
+$Script:OnlineResourcesHtml = Join-Path $Script:PlanningDir "OnlineResources.html"
 $Script:DownloadQueueCsv = Join-Path $Script:PlanningDir "DownloadInstallQueue_INFRASTRUCTURE.csv"
 $Script:DownloadRoot = Join-Path $Script:SessionDir "downloads"
 $Script:DownloadStagingDir = Join-Path $Script:DownloadRoot "staging"
@@ -992,6 +993,7 @@ This builder does not format or erase drives and does not download or install to
 
     if (Test-Path $Script:FolderListCsv) { Copy-Item $Script:FolderListCsv -Destination (Join-Path $Root "_toolkit_admin\planning\FolderStructure.csv") -Force }
     if (Test-Path $Script:ToolListCsv) { Copy-Item $Script:ToolListCsv -Destination (Join-Path $Root "_toolkit_admin\planning\ToolList_SOURCE_OF_TRUTH.csv") -Force }
+    if (Test-Path $Script:OnlineResourcesHtml) { Copy-Item $Script:OnlineResourcesHtml -Destination (Join-Path $Root "_toolkit_admin\planning\OnlineResources.html") -Force }
     if (Test-Path $Script:BuildWorkbookXlsx) { Copy-Item $Script:BuildWorkbookXlsx -Destination (Join-Path $Root "_toolkit_admin\planning\UsbToolkitBuildPlan.xlsx") -Force }
     if (Test-Path $Script:DownloadQueueCsv) { Copy-Item $Script:DownloadQueueCsv -Destination (Join-Path $Root "_toolkit_admin\download_install\DownloadInstallQueue_INFRASTRUCTURE.csv") -Force }
 
@@ -1010,6 +1012,7 @@ This builder does not format or erase drives and does not download or install to
         suggested_size = $DriveRole.SuggestedSize
         editable_folder_list = "_toolkit_admin/planning/FolderStructure.csv"
         editable_tool_list = "_toolkit_admin/planning/ToolList_SOURCE_OF_TRUTH.csv"
+        online_resources = "_toolkit_admin/planning/OnlineResources.html"
         download_install_queue = "_toolkit_admin/download_install/DownloadInstallQueue_INFRASTRUCTURE.csv"
         boundary = "No third-party binaries, installers, ISOs, archives, wordlists, VM images, vendor tools, or downloaded content are redistributed by this project."
     } | ConvertTo-Json -Depth 6
@@ -2141,6 +2144,242 @@ function Show-DownloadInstallInfrastructure {
             Pause-Menu
         }
         elseif ($choice -eq 14) { return }
+    }
+}
+
+
+# ---------------------------------------------------------------------------
+# v0.2.9 online resources dashboard overrides
+# ---------------------------------------------------------------------------
+
+function Html-Escape {
+    param([object]$Value)
+    if ($null -eq $Value) { return "" }
+    return [System.Net.WebUtility]::HtmlEncode([string]$Value)
+}
+
+function Get-OnlineResourcesHtmlPath {
+    Ensure-SessionDir
+    return $Script:OnlineResourcesHtml
+}
+
+function New-ResourceLink {
+    param([string]$Url, [string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Url)) { return "" }
+    $safeUrl = Html-Escape $Url
+    $safeText = Html-Escape $Text
+    return ('<a href="{0}" target="_blank" rel="noopener noreferrer">{1}</a>' -f $safeUrl, $safeText)
+}
+
+function Export-OnlineResourcesHtml {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }
+    $tools = @(Import-Csv -Path $Script:ToolListCsv | Sort-Object Purpose, Category, ToolName)
+    $outPath = Get-OnlineResourcesHtmlPath
+    $generated = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $includedCount = @($tools | Where-Object { Normalize-YesNo $_.Include }).Count
+    $downloadCount = @($tools | Where-Object { (Normalize-YesNo $_.Include) -and (Normalize-YesNo $_.DownloadEnabled) -and -not [string]::IsNullOrWhiteSpace([string]$_.DirectDownloadURL) }).Count
+
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.AppendLine('<!doctype html>')
+    [void]$sb.AppendLine('<html lang="en">')
+    [void]$sb.AppendLine('<head>')
+    [void]$sb.AppendLine('<meta charset="utf-8">')
+    [void]$sb.AppendLine('<meta name="viewport" content="width=device-width, initial-scale=1">')
+    [void]$sb.AppendLine('<title>USB Swiss Army Knife Online Resources</title>')
+    [void]$sb.AppendLine('<style>')
+    [void]$sb.AppendLine('body{font-family:Segoe UI,Arial,sans-serif;line-height:1.45;margin:24px;background:#f7f7f7;color:#1f2937}main{max-width:1180px;margin:auto;background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:24px}h1{margin-top:0}h2{border-top:1px solid #e5e7eb;padding-top:18px;margin-top:28px}.notice{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px;margin:16px 0}.summary{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;background:#f9fafb}.tool{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:10px 0;background:#ffffff}.meta{color:#4b5563;font-size:0.94rem}.links a{display:inline-block;margin-right:12px;margin-top:6px}.badge{display:inline-block;border-radius:999px;padding:2px 8px;background:#e5e7eb;font-size:0.84rem;margin-right:6px}.yes{background:#dcfce7}.no{background:#fee2e2}code{background:#f3f4f6;padding:2px 4px;border-radius:4px}')
+    [void]$sb.AppendLine('</style>')
+    [void]$sb.AppendLine('</head>')
+    [void]$sb.AppendLine('<body><main>')
+    [void]$sb.AppendLine('<h1>USB Swiss Army Knife Online Resources</h1>')
+    [void]$sb.AppendLine(('<p class="meta">Generated {0} from <code>ToolList_SOURCE_OF_TRUTH.csv</code>.</p>' -f (Html-Escape $generated)))
+    [void]$sb.AppendLine('<div class="notice"><strong>Transparency note:</strong> The CSV is the source of truth. This HTML page is a clickable reference view only. Review each official source page, license terms, direct download URL, and source-published hash before enabling downloads.</div>')
+    [void]$sb.AppendLine('<div class="summary">')
+    [void]$sb.AppendLine(('<div class="card"><strong>{0}</strong><br>tool rows</div>' -f $tools.Count))
+    [void]$sb.AppendLine(('<div class="card"><strong>{0}</strong><br>included rows</div>' -f $includedCount))
+    [void]$sb.AppendLine(('<div class="card"><strong>{0}</strong><br>download-enabled rows</div>' -f $downloadCount))
+    [void]$sb.AppendLine('</div>')
+
+    $currentPurpose = $null
+    $currentCategory = $null
+    foreach ($tool in $tools) {
+        if ($tool.Purpose -ne $currentPurpose) {
+            $currentPurpose = $tool.Purpose
+            $currentCategory = $null
+            [void]$sb.AppendLine(('<h2>{0}</h2>' -f (Html-Escape $currentPurpose)))
+        }
+        if ($tool.Category -ne $currentCategory) {
+            $currentCategory = $tool.Category
+            [void]$sb.AppendLine(('<h3>{0}</h3>' -f (Html-Escape $currentCategory)))
+        }
+        $includeClass = if (Normalize-YesNo $tool.Include) { 'badge yes' } else { 'badge no' }
+        $downloadClass = if (Normalize-YesNo $tool.DownloadEnabled) { 'badge yes' } else { 'badge no' }
+        [void]$sb.AppendLine('<section class="tool">')
+        [void]$sb.AppendLine(('<strong>{0}</strong><br>' -f (Html-Escape $tool.ToolName)))
+        [void]$sb.AppendLine(('<span class="{0}">Include: {1}</span><span class="{2}">Download: {3}</span><span class="badge">Level: {4}</span>' -f $includeClass, (Html-Escape $tool.Include), $downloadClass, (Html-Escape $tool.DownloadEnabled), (Html-Escape $tool.PackageLevel)))
+        [void]$sb.AppendLine(('<p class="meta"><strong>Target folder:</strong> <code>{0}</code></p>' -f (Html-Escape $tool.TargetFolder)))
+        [void]$sb.AppendLine('<p class="links">')
+        [void]$sb.AppendLine((New-ResourceLink -Url ([string]$tool.OfficialSourceURL) -Text 'Official source page'))
+        [void]$sb.AppendLine((New-ResourceLink -Url ([string]$tool.DirectDownloadURL) -Text 'Direct download URL'))
+        [void]$sb.AppendLine((New-ResourceLink -Url ([string]$tool.HashSourceURL) -Text 'Hash source page'))
+        [void]$sb.AppendLine('</p>')
+        if (-not [string]::IsNullOrWhiteSpace([string]$tool.LicenseNotes)) {
+            [void]$sb.AppendLine(('<p class="meta"><strong>License/source notes:</strong> {0}</p>' -f (Html-Escape $tool.LicenseNotes)))
+        }
+        if (-not [string]::IsNullOrWhiteSpace([string]$tool.Notes)) {
+            [void]$sb.AppendLine(('<p class="meta"><strong>Notes:</strong> {0}</p>' -f (Html-Escape $tool.Notes)))
+        }
+        [void]$sb.AppendLine('</section>')
+    }
+    [void]$sb.AppendLine('<div class="notice"><strong>Boundary:</strong> This page does not download, install, validate, endorse, or redistribute tools. It is generated from user-editable planning data.</div>')
+    [void]$sb.AppendLine('</main></body></html>')
+    Set-Content -Path $outPath -Value $sb.ToString() -Encoding UTF8
+    return $outPath
+}
+
+function Open-OnlineResourcesHtml {
+    $path = Export-OnlineResourcesHtml
+    Invoke-Item $path
+}
+
+function Export-EditableBuildLists {
+    Ensure-SessionDir
+    $folders = @(Get-FilteredFolderRows -Purpose $Script:Purpose -Level $Script:PackageLevel)
+    $tools = @(Get-FilteredToolRows -Purpose $Script:Purpose -Level $Script:PackageLevel)
+    $folders | Export-Csv -Path $Script:FolderListCsv -NoTypeInformation -Encoding UTF8
+    $tools | Export-Csv -Path $Script:ToolListCsv -NoTypeInformation -Encoding UTF8
+    Export-DownloadInstallQueue -ToolRows $tools
+    Write-ToolListEditingGuide | Out-Null
+    Export-CustomToolRowTemplate | Out-Null
+    Export-DownloadTransparencyPlan | Out-Null
+    Export-OnlineResourcesHtml | Out-Null
+    if ($Script:OutputFormat -eq "CSV+XLSX") { Export-BuildWorkbookXlsx -FolderRows $folders -ToolRows $tools }
+}
+
+function Confirm-EditableLists {
+    Export-EditableBuildLists
+    Write-Header
+    Write-Host "Editable build lists created" -ForegroundColor Cyan
+    Write-Host "Planning folder: $Script:PlanningDir"
+    Write-Host "Software source of truth: $Script:ToolListCsv" -ForegroundColor Green
+    Write-Host "Online resources page:   $(Get-OnlineResourcesHtmlPath)" -ForegroundColor Green
+    Write-Host "Editing guide:           $(Get-ToolListEditingGuidePath)"
+    Write-Host "Custom row template:     $(Get-CustomToolTemplatePath)"
+    Write-Host "Transparency plan/info:  $(Get-DownloadTransparencyPlanPath)"
+    Write-Host "Folder plan/info:        $Script:FolderListCsv"
+    if ($Script:OutputFormat -eq "CSV+XLSX") { Write-Host "XLSX workbook/info:       $Script:BuildWorkbookXlsx" }
+    Write-Host ""
+    Write-Host "Edit ToolList_SOURCE_OF_TRUTH.csv before writing the build." -ForegroundColor Yellow
+    Write-Host "- Include=Yes/No controls whether the tool source record is used."
+    Write-Host "- DirectDownloadURL is the exact URL the download manager fetches when DownloadEnabled=Yes."
+    Write-Host "- OnlineResources.html is clickable reference only; the CSV remains the source of truth."
+    Write-Host ""
+    Write-Host " 1. Open planning folder"
+    Write-Host " 2. Open source-of-truth CSV"
+    Write-Host " 3. Open online resources page"
+    Write-Host " 4. Continue using current lists"
+    Write-Host " 5. Stop and resume later"
+    Write-Host ""
+    $choice = Read-MenuChoice -Prompt "Choice" -Min 1 -Max 5
+    if ($choice -eq 1) { Start-Process explorer.exe $Script:PlanningDir; Pause-Menu }
+    elseif ($choice -eq 2) { Invoke-Item $Script:ToolListCsv; Pause-Menu }
+    elseif ($choice -eq 3) { Open-OnlineResourcesHtml; Pause-Menu }
+    elseif ($choice -eq 5) { Save-Session; throw "Stopped for list editing." }
+}
+
+function Show-AdvancedMenu {
+    while ($true) {
+        Write-Header
+        Write-Host "Advanced / utility menu" -ForegroundColor Cyan
+        Write-Host " 1. Show saved build path"
+        Write-Host " 2. Open planning folder"
+        Write-Host " 3. Regenerate editable build lists"
+        Write-Host " 4. Open online resources page"
+        Write-Host " 5. Set drive exclusions"
+        Write-Host " 6. Download manager"
+        Write-Host " 7. Start new guided build"
+        Write-Host " 8. Clear saved session"
+        Write-Host " 9. Back"
+        Write-Host ""
+        $choice = Read-MenuChoice -Prompt "Choice" -Min 1 -Max 9
+        switch ($choice) {
+            1 { if (-not (Load-Session)) { Write-Host "No saved session." -ForegroundColor Yellow } else { if ($Script:BuildPlan.Count -eq 0) { Build-PlanFromAnswers }; Show-BuildPlan }; Pause-Menu }
+            2 { Ensure-SessionDir; Start-Process explorer.exe $Script:PlanningDir; Pause-Menu }
+            3 { if (-not (Load-Session)) { Write-Host "No saved session. Start a guided build first." -ForegroundColor Yellow } else { Export-EditableBuildLists; Write-Host "Planning files regenerated in $Script:PlanningDir" -ForegroundColor Green }; Pause-Menu }
+            4 { Open-OnlineResourcesHtml; Pause-Menu }
+            5 { Set-DriveExclusions; Pause-Menu }
+            6 { Show-DownloadInstallInfrastructure }
+            7 { Run-GuidedBuild }
+            8 { Clear-Session; Write-Host "Saved session cleared." -ForegroundColor Green; Pause-Menu }
+            9 { return }
+        }
+    }
+}
+
+function Show-DownloadInstallInfrastructure {
+    Ensure-SessionDir
+    if (-not (Test-Path $Script:DownloadQueueCsv)) { Export-EditableBuildLists }
+    while ($true) {
+        Write-Header
+        Write-Host "Download manager" -ForegroundColor Cyan
+        Write-Host "Source of truth: $Script:ToolListCsv" -ForegroundColor Green
+        Write-Host "Online resources: $(Get-OnlineResourcesHtmlPath)" -ForegroundColor Green
+        Write-Host "Manifest:        $Script:DownloadManifestCsv"
+        Write-Host "Download root:   $Script:DownloadRoot"
+        Write-Host ""
+        Write-Host "Transparency model:" -ForegroundColor Yellow
+        Write-Host "- ToolList_SOURCE_OF_TRUTH.csv is editable and remains the file the builder obeys."
+        Write-Host "- OnlineResources.html is a clickable browser view generated from that CSV."
+        Write-Host "- DirectDownloadURL is the exact URL fetched. Downloads do not run unless DownloadEnabled=Yes."
+        Write-Host "- This tool downloads and hashes only; it does not install or execute downloaded files."
+        Write-Host ""
+        Write-Host " 1. Open planning folder"
+        Write-Host " 2. Open ToolList_SOURCE_OF_TRUTH.csv"
+        Write-Host " 3. Open online resources page"
+        Write-Host " 4. Open editing guide"
+        Write-Host " 5. Create/open custom tool row template"
+        Write-Host " 6. Validate source-of-truth list"
+        Write-Host " 7. Download preview - exact sources"
+        Write-Host " 8. Export transparency plan"
+        Write-Host " 9. Regenerate queue from current source-of-truth list"
+        Write-Host "10. Export download readiness report"
+        Write-Host "11. Run enabled downloads"
+        Write-Host "12. Hash completed downloads"
+        Write-Host "13. Open downloads folder"
+        Write-Host "14. Open download manifest"
+        Write-Host "15. Back"
+        Write-Host ""
+        $choice = Read-MenuChoice -Prompt "Choice" -Min 1 -Max 15
+        if ($choice -eq 1) { Start-Process explorer.exe $Script:PlanningDir; Pause-Menu }
+        elseif ($choice -eq 2) { if (-not (Test-Path $Script:ToolListCsv)) { Export-EditableBuildLists }; Invoke-Item $Script:ToolListCsv; Pause-Menu }
+        elseif ($choice -eq 3) { Open-OnlineResourcesHtml; Pause-Menu }
+        elseif ($choice -eq 4) { $p = Write-ToolListEditingGuide; Invoke-Item $p; Pause-Menu }
+        elseif ($choice -eq 5) { $p = Export-CustomToolRowTemplate; Invoke-Item $p; Pause-Menu }
+        elseif ($choice -eq 6) { Show-ToolListValidation }
+        elseif ($choice -eq 7) { Show-DownloadPreview }
+        elseif ($choice -eq 8) { $p = Export-DownloadTransparencyPlan; Write-Host "Transparency plan exported: $p" -ForegroundColor Green; Pause-Menu }
+        elseif ($choice -eq 9) {
+            $tools = @(Import-CurrentToolRows)
+            Export-DownloadInstallQueue -ToolRows $tools
+            Export-OnlineResourcesHtml | Out-Null
+            Write-Host "Queue regenerated: $Script:DownloadQueueCsv" -ForegroundColor Green
+            Pause-Menu
+        }
+        elseif ($choice -eq 10) {
+            $path = Export-DownloadReadinessReport
+            Write-Host "Readiness report exported: $path" -ForegroundColor Green
+            Pause-Menu
+        }
+        elseif ($choice -eq 11) { Invoke-EnabledDownloads }
+        elseif ($choice -eq 12) { Hash-CompletedDownloads }
+        elseif ($choice -eq 13) { Start-Process explorer.exe $Script:DownloadRoot; Pause-Menu }
+        elseif ($choice -eq 14) {
+            if (Test-Path $Script:DownloadManifestCsv) { Invoke-Item $Script:DownloadManifestCsv }
+            else { Write-Host "No download manifest exists yet." -ForegroundColor Yellow }
+            Pause-Menu
+        }
+        elseif ($choice -eq 15) { return }
     }
 }
 

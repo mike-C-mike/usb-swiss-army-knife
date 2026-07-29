@@ -129,3 +129,8 @@ The Download Manager shows the official review page and exact direct download UR
 ## v0.2.6 CI compatibility
 
 This build restores the root convenience launchers and `Usb-SwissArmyKnife.ps1` entry point used by the repository validation workflow. The root script delegates to `resources/usak_menu.ps1`, which remains the active guided menu used by the EXE.
+
+
+## Online resources page
+
+Version 0.2.9 generates `OnlineResources.html` from `ToolList_SOURCE_OF_TRUTH.csv`. The CSV remains the source of truth. The HTML page is a clickable reference view for official source pages, exact direct download URLs, hash source pages, target folders, and notes. It is informational only and does not download, install, validate, endorse, or redistribute tools.
